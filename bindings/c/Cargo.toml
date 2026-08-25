@@ -1,0 +1,29 @@
+[package]
+name = "laurn-c"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[lib]
+crate-type = ["cdylib", "staticlib"]
+
+[dependencies]
+state = { path = "../../core/state" }
+transition = { path = "../../core/transition" }
+delta = { path = "../../core/delta" }
+epoch = { path = "../../core/epoch" }
+authority = { path = "../../core/authority" }
+verification = { path = "../../core/verification" }
+commitment = { path = "../../core/commitment" }
+policy = { path = "../../core/policy" }
+replay = { path = "../../core/replay" }
+protocol = { path = "../../protocol" }
+version_crate = { path = "../../core/version", package = "version" }
+libc.workspace = true
+ed25519-dalek.workspace = true
+log.workspace = true
+
+[lints]
+workspace = true
