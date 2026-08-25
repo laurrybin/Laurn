@@ -1,0 +1,26 @@
+[package]
+name = "laurn-simulator"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+state = { path = "../../core/state" }
+transition = { path = "../../core/transition" }
+delta = { path = "../../core/delta" }
+epoch = { path = "../../core/epoch" }
+authority = { path = "../../core/authority" }
+verification = { path = "../../core/verification" }
+evidence = { path = "../../core/evidence" }
+replay = { path = "../../core/replay" }
+protocol = { path = "../../protocol" }
+commitment = { path = "../../core/commitment" }
+version_crate = { path = "../../core/version", package = "version" }
+borsh.workspace = true
+ed25519-dalek.workspace = true
+rand.workspace = true
+
+[lints]
+workspace = true
