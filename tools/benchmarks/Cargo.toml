@@ -1,0 +1,30 @@
+[package]
+name = "laurn-benchmarks"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+protocol = { path = "../../protocol" }
+commitment = { path = "../../core/commitment" }
+authority = { path = "../../core/authority" }
+epoch = { path = "../../core/epoch" }
+verification = { path = "../../core/verification" }
+policy = { path = "../../core/policy" }
+version = { path = "../../core/version" }
+transition = { path = "../../core/transition" }
+borsh = { workspace = true }
+ed25519-dalek = { workspace = true, features = ["rand_core"] }
+rand = "0.8"
+
+[dev-dependencies]
+criterion = "0.5"
+
+[[bench]]
+name = "laurn_bench"
+harness = false
+
+[lints]
+workspace = true
