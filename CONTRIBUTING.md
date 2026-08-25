@@ -1,18 +1,31 @@
 # Contributing to LAURN
 
-## Global Development Doctrine
+We welcome contributions to LAURN. To maintain the integrity and determinism of the state engine, all contributions must adhere to strict engineering and architectural standards.
 
-LAURN follows a strict "Production from First Implementation" development doctrine.
+## Contribution Workflow (GitHub Flow)
 
-1. **No Placeholders**: We do not use mocks, stubs, fake implementations, or placeholders (like `TODO`, `FIXME`, `unimplemented!()`, `todo!()`) in production code. A feature is implemented correctly when first introduced. If it's too large, split it into vertically integrated, independent, production-valid slices.
-2. **Vertical Integration**: Every feature must integrate into the actual architecture (protocol -> Rust core -> FFI -> Unreal adapter).
-3. **No Architectural Debt**: Do not introduce temporary architecture to meet a milestone (e.g., no `DummyVerifier` or `PlaceholderTransport`).
-4. **Claim Discipline**: Every claim (e.g., "cross-platform", "deterministic") must be backed by real tests and evidence.
-5. **Definition of Done**: A feature is done when its implementation exists, is integrated, tests pass, failure paths exist, and no prohibited placeholders remain.
+1. **Fork and Clone**: Fork the repository and clone it locally.
+2. **Branch Naming**: Use the format `<type>/<issue-number>-<brief-description>` (e.g., `feat/12-add-fixed-point-sqrt`).
+3. **Commit Messages**: All commits must follow the [Conventional Commits](https://www.conventionalcommits.org/) standard.
+4. **Pull Requests**: Open a Pull Request against the `main` branch. Ensure the CI pipeline passes.
 
-## Commits & PRs
-- Ensure you run the placeholder audit script or rely on CI to ensure no forbidden keywords are in your PR.
-- Run `cargo fmt` and `cargo clippy --workspace -- -D warnings` before submitting.
-- Follow conventional commits.
+## Architectural Guidelines
 
-Thank you for helping us build a robust, verifiable state-transition engine!
+- **Determinism**: The core state engine (`/core/*`) must remain strictly deterministic. Never use floating-point types (`f32`, `f64`) or standard library components that introduce non-determinism (e.g., non-seeded RNGs or system time). Use the provided fixed-point math engine.
+- **No Panics**: The core logic should return `Result` types. Usage of `unwrap()`, `expect()`, or `panic!()` is strictly forbidden in production code outside of test harnesses.
+- **C ABI Stability**: Any changes to `/bindings/c/` must maintain backwards compatibility or be explicitly version-bumped following semantic versioning.
+
+## Development Setup
+
+```bash
+# Install the required Rust toolchain
+rustup toolchain install 1.75.0
+
+# Install clippy and rustfmt
+rustup component add clippy rustfmt
+
+# Run local checks before pushing
+cargo fmt --all -- --check
+cargo clippy --all-targets --all-features -- -D warnings
+cargo test --workspace
+```

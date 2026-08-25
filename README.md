@@ -1,39 +1,78 @@
-# LAURN — Verifiable State Infrastructure for Real-Time Systems
+# LAURN
 
-LAURN is a deterministic, verifiable state-transition runtime for real-time multiplayer and simulation systems.
+[![Build Status](https://img.shields.io/github/actions/workflow/status/laurrybin/Laurn/ci.yml?branch=main)](https://github.com/laurrybin/Laurn/actions)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![Version](https://img.shields.io/badge/version-0.1.0-orange.svg)]()
 
-It provides a common verification and state-synchronization layer that allows independently executing clients and servers to establish whether a state transition is consistent with an agreed simulation model, authority, epoch, policy, and prior verified state.
+LAURN is a deterministic, verifiable state-transition runtime designed for multiplayer simulations. It provides a shared verification layer, ensuring that state transitions conform strictly to an agreed-upon authority, epoch, policy, and simulation model.
 
-## Core Principles
-1. **Deterministic where practical**: Identical logical inputs produce identical canonical state representations.
-2. **Verifiable, not blindly trusted**: A verifier can determine whether a transition satisfies the protocol's requirements.
-3. **Evidence over assertion**: LAURN never treats a claim of validity as equivalent to evidence of validity.
-4. **Engine-independent core**: Built with a Rust core, initially targeting Unreal Engine via a C ABI integration.
-5. **No mandatory blockchain/AI**: Relies on solid cryptography and deterministic verification.
-6. **Production from First Implementation**: We do not use mocks, stubs, or placeholders for incomplete features.
+## Overview
+
+LAURN operates as a standalone cryptographic state engine. It accepts deterministic inputs (transitions) and computes rigorous, mathematically verifiable state outputs (commitments). It is designed to be embedded within real-time engines, providing authoritative state management without relying on consensus mechanisms or blockchain architecture.
 
 ## Architecture
 
+LAURN is composed of a Rust core and exposes a flat C ABI for engine integrations.
+
 ```mermaid
 graph TD
-    UE[Unreal Engine C++] --> Ad[Unreal Adapter]
-    Ad --> Run[LAURN Runtime]
-    Run --> Core[LAURN Core / Rust]
-    Core --> Pro[LAURN Protocol]
-    Pro --> Net[Network / Storage / Replay]
+    subgraph Host Engine
+        UE[Unreal Engine C++]
+        Ad[LaurnSubsystem / Unreal Adapter]
+    end
+    subgraph LAURN
+        Run[Runtime Layer]
+        Core[Core Primitives / Math]
+        Pro[Protocol / Serialization]
+        Ver[Verification & Replay]
+    end
+    
+    UE --> Ad
+    Ad -->|C ABI| Run
+    Run --> Core
+    Run --> Pro
+    Run --> Ver
 ```
 
-## Setup & Building
-- **MSRV**: Rust 1.75.0 (Stable toolchain)
-- **Unreal Compatibility**: UE 5.3+
+## Prerequisites
+
+- **Rust**: `1.75.0` or higher (stable toolchain)
+- **C++ Compiler**: MSVC (Windows), Clang (Linux/macOS)
+- **Unreal Engine**: `5.3` or higher (if building the Unreal plugin)
+
+## Quickstart
+
+### Building the Core Library
 
 ```bash
-# Build the core library and tools
-cargo build --workspace
+# Clone the repository
+git clone https://github.com/laurrybin/Laurn.git
+cd Laurn
 
-# Run tests
+# Build the workspace
+cargo build --release
+
+# Run the test suite
 cargo test --workspace
 ```
 
-## Licensing
+### Running the Simulator
+
+The included validation simulator runs end-to-end deterministic verification checks:
+
+```bash
+cargo run --bin laurn-simulator
+```
+
+## Repository Structure
+
+- `/core/`: Foundational logic (math, authority, epoch, commitments, state, transitions).
+- `/protocol/`: Network serialization and deserialization.
+- `/bindings/c/`: Flat C ABI for foreign function interfacing.
+- `/tools/`: CLI utilities (simulator, inspector, replay runner).
+- `/unreal/`: Unreal Engine 5 integration plugin.
+- `/docs/`: Architectural Decision Records (ADRs) and detailed API documentation.
+
+## License
+
 This project is licensed under the Apache 2.0 License. See the [LICENSE](LICENSE) file for details.
