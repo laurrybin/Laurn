@@ -1,0 +1,16 @@
+[package]
+name = "replay"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+borsh = { workspace = true }
+commitment = { path = "../commitment" }
+protocol = { path = "../../protocol" }
+authority = { path = "../authority" }
+epoch = { path = "../epoch" }
+[lints]
+workspace = true
