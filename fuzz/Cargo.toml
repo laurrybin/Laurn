@@ -1,0 +1,32 @@
+[package]
+name = "laurn-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+borsh = { version = "1.5.0", features = ["derive"] }
+
+[dependencies.protocol]
+path = "../protocol"
+
+[dependencies.delta]
+path = "../core/delta"
+
+[[bin]]
+name = "fuzz_message"
+path = "fuzz_targets/fuzz_message.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_delta"
+path = "fuzz_targets/fuzz_delta.rs"
+test = false
+doc = false
+bench = false
