@@ -1,0 +1,13 @@
+/target/
+/.idea/
+/.vscode/
+*.swp
+
+# Unreal Engine Ignores
+/unreal/Laurn/Binaries/
+/unreal/Laurn/Intermediate/
+/unreal/Laurn/Saved/
+/examples/unreal/Binaries/
+/examples/unreal/Intermediate/
+/examples/unreal/Saved/
+/examples/unreal/DerivedDataCache/

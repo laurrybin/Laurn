@@ -1,0 +1,88 @@
+name: CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  lint_and_audit:
+    name: Lint, Format, and Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Check Formatting
+        run: cargo fmt -- --check
+
+      - name: Lint with Clippy
+        run: cargo clippy --workspace -- -D warnings
+
+      - name: Run Placeholder Audit
+        run: |
+          echo "Running placeholder audit..."
+          FORBIDDEN=("TODO" "FIXME" "XXX" "HACK" "placeholder" "todo!()" "unimplemented!()" "panic!")
+          
+          # We check source files for these forbidden tokens.
+          # Exceptions exist for test files explicitly.
+          FAILED=0
+          for word in "${FORBIDDEN[@]}"; do
+            if grep -rinE "\b$word\b" . \
+              --exclude-dir=target \
+              --exclude-dir=.git \
+              --exclude-dir=tests \
+              --exclude="*.md" \
+              --exclude="ci.yml" \
+              --exclude="Cargo.toml"; then
+              echo "::error::Found forbidden placeholder: $word"
+              FAILED=1
+            fi
+          done
+          
+          if [ $FAILED -eq 1 ]; then
+            echo "::error::Placeholder audit failed. Remove forbidden terms before merging."
+            exit 1
+          fi
+
+  security_audit:
+    name: Security and License Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install cargo-deny
+        uses: baptiste0928/cargo-install@v2
+        with:
+          crate: cargo-deny
+          
+      - name: Run cargo deny check
+        run: cargo deny check
+
+  build_and_test:
+    name: Build and Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build Workspace
+        run: cargo build --workspace
+
+      - name: Run Tests (Cross-Platform Validation)
+        run: cargo test --workspace

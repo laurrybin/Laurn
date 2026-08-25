@@ -1,0 +1,41 @@
+[workspace]
+members = [
+    "core/*",
+    "protocol",
+    "bindings/c",
+    "tools/*",
+    "fuzz",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+publish = false
+authors = ["LAURN Contributors"]
+license = "Apache-2.0"
+
+[workspace.dependencies]
+borsh = { version = "1.5.0", features = ["derive"] }
+blake3 = "1.5.0"
+subtle = "2.5.0"
+fixed = { version = "1.28.0", features = ["borsh"] }
+ed25519-dalek = { version = "2.1.0", features = ["rand_core"] }
+bitflags = "2.4.2"
+rand = { version = "0.8.5", features = ["std", "std_rng"] }
+delta = { path = "core/delta" }
+libc = "0.2.153"
+log = "0.4.20"
+
+[workspace.lints.clippy]
+all = "deny"
+pedantic = "deny"
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+todo = "deny"
+unimplemented = "deny"
+unreachable = "deny"
+
+[workspace.lints.rust]
+unsafe_code = "deny"
