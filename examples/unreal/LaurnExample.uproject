@@ -1,0 +1,22 @@
+{
+	"FileVersion": 3,
+	"EngineAssociation": "5.3",
+	"Category": "",
+	"Description": "LAURN Unreal Engine 5 Example Integration",
+	"Modules": [
+		{
+			"Name": "LaurnExample",
+			"Type": "Runtime",
+			"LoadingPhase": "Default",
+			"AdditionalDependencies": [
+				"Engine"
+			]
+		}
+	],
+	"Plugins": [
+		{
+			"Name": "Laurn",
+			"Enabled": true
+		}
+	]
+}
