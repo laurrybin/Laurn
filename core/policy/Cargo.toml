@@ -1,0 +1,17 @@
+[package]
+name = "policy"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+borsh = { workspace = true }
+bitflags = { workspace = true }
+authority = { path = "../authority" }
+transition = { path = "../transition" }
+epoch = { path = "../epoch" }
+
+[lints]
+workspace = true
