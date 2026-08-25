@@ -1,0 +1,23 @@
+[package]
+name = "verification"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+state = { path = "../state" }
+commitment = { path = "../commitment" }
+transition = { path = "../transition" }
+epoch = { path = "../epoch" }
+authority = { path = "../authority" }
+policy = { path = "../policy" }
+borsh = { workspace = true }
+
+[dev-dependencies]
+ed25519-dalek = { workspace = true, features = ["rand_core"] }
+rand = { workspace = true, features = ["std", "std_rng"] }
+
+[lints]
+workspace = true
