@@ -1,0 +1,17 @@
+[package]
+name = "state"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+borsh = { workspace = true }
+version_crate = { path = "../version", package = "version" }
+epoch = { path = "../epoch" }
+authority = { path = "../authority" }
+commitment = { path = "../commitment" }
+
+[lints]
+workspace = true
