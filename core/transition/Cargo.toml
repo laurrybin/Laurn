@@ -1,0 +1,17 @@
+[package]
+name = "transition"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+borsh = { workspace = true }
+subtle = { workspace = true }
+commitment = { path = "../commitment" }
+authority = { path = "../authority" }
+epoch = { path = "../epoch" }
+
+[lints]
+workspace = true
