@@ -1,0 +1,21 @@
+[package]
+name = "laurn-inspector"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+clap = { version = "4.4", features = ["derive"] }
+hex = "0.4"
+replay = { path = "../../core/replay" }
+protocol = { path = "../../protocol" }
+commitment = { path = "../../core/commitment" }
+authority = { path = "../../core/authority" }
+epoch = { path = "../../core/epoch" }
+verification = { path = "../../core/verification" }
+policy = { path = "../../core/policy" }
+borsh = { workspace = true }
+[lints]
+workspace = true
