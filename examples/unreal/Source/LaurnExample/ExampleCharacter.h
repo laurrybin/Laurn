@@ -12,17 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![no_main]
-use delta::StateDelta;
-use libfuzzer_sys::fuzz_target;
+#pragma once
+#include "CoreMinimal.h"
+#include "GameFramework/Character.h"
+#include "ExampleCharacter.generated.h"
 
-fuzz_target!(|data: &[u8]| {
-    // Attempt to decode the raw bytes as a StateDelta
-    if let Ok(delta) = borsh::from_slice::<StateDelta>(data) {
-        // Evaluate the bounds to ensure no panics or algorithmic complexity hangs occur
-        let _ = delta.validate_bounds();
-
-        // Ensure we can re-encode it without panicking
-        let _ = borsh::to_vec(&delta);
-    }
-});
+UCLASS()
+class LAURNEXAMPLE_API AExampleCharacter : public ACharacter
+{
+    GENERATED_BODY()
+public:
+    AExampleCharacter();
+    virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
+    
+    void MoveForward(float Value);
+    void MoveRight(float Value);
+};

@@ -22,8 +22,6 @@ use state::CanonicalState;
 use transition::Transition;
 use version_crate::ProtocolVersion;
 
-
-
 /// A strictly bounded set of error codes for network communication.
 /// Avoids the use of strings for deterministic and allocation-free error handling.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
@@ -130,7 +128,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_laurn_message_serialization() {
+    fn test_laurn_message_serialization() -> Result<(), Box<dyn std::error::Error>> {
         let version = ProtocolVersion::new(1, 0, 0);
         let msg = LaurnMessage {
             version,
@@ -139,14 +137,14 @@ mod tests {
             }),
         };
 
-        let bytes = borsh::to_vec(&msg).unwrap();
-        let decoded: LaurnMessage = borsh::from_slice(&bytes).unwrap();
+        let bytes = borsh::to_vec(&msg)?;
+        let decoded: LaurnMessage = borsh::from_slice(&bytes)?;
 
         assert_eq!(msg, decoded);
     }
 
     #[test]
-    fn test_version_extraction_before_full_decode() {
+    fn test_version_extraction_before_full_decode() -> Result<(), Box<dyn std::error::Error>> {
         let version = ProtocolVersion::new(2, 5, 1);
         let msg = LaurnMessage {
             version,
@@ -154,12 +152,12 @@ mod tests {
                 code: ErrorCode::Unknown,
             }),
         };
-        let bytes = borsh::to_vec(&msg).unwrap();
+        let bytes = borsh::to_vec(&msg)?;
 
         // The ProtocolVersion is the first thing in the struct.
         // It consists of three u32s (major, minor, patch), taking 12 bytes.
-        let decoded_version: ProtocolVersion = borsh::from_slice(&bytes[0..12]).unwrap();
-        
+        let decoded_version: ProtocolVersion = borsh::from_slice(&bytes[0..12])?;
+
         assert_eq!(decoded_version.major, 2);
         assert_eq!(decoded_version.minor, 5);
         assert_eq!(decoded_version.patch, 1);

@@ -12,18 +12,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[must_use]
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
+#pragma once
+#include "CoreMinimal.h"
+#include "GameFramework/PlayerController.h"
+#include "ExamplePlayerController.generated.h"
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
+UCLASS()
+class LAURNEXAMPLE_API AExamplePlayerController : public APlayerController
+{
+    GENERATED_BODY()
+public:
+    virtual void SetupInputComponent() override;
+    
+protected:
+    UFUNCTION(BlueprintCallable, Category = "Laurn|Diagnostic")
+    void TriggerDiagnosticTeleport();
+    void StartRecording();
+    void StopRecording();
+    void PlaybackReplay();
+    
+    virtual void Tick(float DeltaSeconds) override;
+    
+private:
+    FVector LastCanonicalLocation;
+};

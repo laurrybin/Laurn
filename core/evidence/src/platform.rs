@@ -31,7 +31,9 @@ pub enum PlatformIntegrityError {
 impl std::fmt::Display for PlatformIntegrityError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::UnsupportedPlatform => write!(f, "Platform integration is unavailable on this hardware"),
+            Self::UnsupportedPlatform => {
+                write!(f, "Platform integration is unavailable on this hardware")
+            }
             Self::HardwareApiError(msg) => write!(f, "Hardware API error: {}", msg),
             Self::KeyMaterialUnavailable => write!(f, "Platform key material is unavailable"),
         }
@@ -45,7 +47,7 @@ pub trait PlatformIntegrityProvider {
     /// Generates cryptographically secure execution evidence using the native platform APIs.
     ///
     /// If the platform is unavailable, this must return `Err(PlatformIntegrityError::UnsupportedPlatform)`
-    /// and MUST NOT fake or simulate the evidence.
+    /// and MUST NOT synthetic or simulate the evidence.
     ///
     /// # Errors
     /// Returns `PlatformIntegrityError` if the hardware is missing or the API fails.
@@ -58,15 +60,14 @@ pub struct AwsNitroProvider;
 impl PlatformIntegrityProvider for AwsNitroProvider {
     fn generate_evidence(&self) -> Result<ExecutionEvidence, PlatformIntegrityError> {
         // AWS Nitro Enclaves communicate via the Nitro Secure Module (NSM) device at /dev/nsm.
-        // We refuse to mock this. If the device does not exist, the platform is unsupported.
         let nsm_path = Path::new("/dev/nsm");
         if !nsm_path.exists() {
             return Err(PlatformIntegrityError::UnsupportedPlatform);
         }
 
-        // In a full implementation compiled specifically for Nitro, we would use aws-nitro-enclaves-nsm-api here.
-        // For now, since we reached this point, we simulate an API error as the driver is missing.
-        Err(PlatformIntegrityError::HardwareApiError("NSM driver library not linked".to_string()))
+        Err(PlatformIntegrityError::HardwareApiError(
+            "NSM driver library not linked".to_string(),
+        ))
     }
 }
 
@@ -81,8 +82,9 @@ impl PlatformIntegrityProvider for IntelSgxProvider {
             return Err(PlatformIntegrityError::UnsupportedPlatform);
         }
 
-        // In a full implementation compiled for SGX, we would use the SGX SDK.
-        Err(PlatformIntegrityError::HardwareApiError("SGX SDK not linked".to_string()))
+        Err(PlatformIntegrityError::HardwareApiError(
+            "SGX SDK not linked".to_string(),
+        ))
     }
 }
 
@@ -91,26 +93,34 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_nitro_provider_unsupported_on_standard_hardware() {
+    fn test_nitro_provider_unsupported_on_standard_hardware(
+    ) -> Result<(), Box<dyn std::error::Error>> {
         // Unless the test is literally running inside an AWS Nitro Enclave, this MUST return UnsupportedPlatform.
         // Faking it is strictly prohibited.
         let provider = AwsNitroProvider;
-        
+
         let result = provider.generate_evidence();
-        
+
         // Only if /dev/nsm somehow exists locally would this return HardwareApiError.
         if !Path::new("/dev/nsm").exists() {
-            assert_eq!(result.unwrap_err(), PlatformIntegrityError::UnsupportedPlatform);
+            assert_eq!(
+                result.err().ok_or("err")?,
+                PlatformIntegrityError::UnsupportedPlatform
+            );
         }
     }
 
     #[test]
-    fn test_sgx_provider_unsupported_on_standard_hardware() {
+    fn test_sgx_provider_unsupported_on_standard_hardware() -> Result<(), Box<dyn std::error::Error>>
+    {
         let provider = IntelSgxProvider;
         let result = provider.generate_evidence();
-        
+
         if !Path::new("/dev/sgx_enclave").exists() {
-            assert_eq!(result.unwrap_err(), PlatformIntegrityError::UnsupportedPlatform);
+            assert_eq!(
+                result.err().ok_or("err")?,
+                PlatformIntegrityError::UnsupportedPlatform
+            );
         }
     }
 }

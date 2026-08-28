@@ -69,7 +69,7 @@ impl ReplayBuffer {
         self.set.insert(id);
         true
     }
-    
+
     /// Clears the replay buffer entirely.
     pub fn clear(&mut self) {
         self.history.clear();
@@ -84,25 +84,25 @@ mod tests {
     #[test]
     fn test_replay_buffer_capacity() {
         let mut buffer = ReplayBuffer::new(3);
-        
+
         // Insert 3 items
         assert!(buffer.insert(TransitionId(1)));
         assert!(buffer.insert(TransitionId(2)));
         assert!(buffer.insert(TransitionId(3)));
-        
+
         assert!(buffer.contains(&TransitionId(1)));
         assert!(buffer.contains(&TransitionId(2)));
         assert!(buffer.contains(&TransitionId(3)));
-        
+
         // Insert a 4th item, should evict 1
         assert!(buffer.insert(TransitionId(4)));
-        
+
         assert!(!buffer.contains(&TransitionId(1)));
         assert!(buffer.contains(&TransitionId(2)));
         assert!(buffer.contains(&TransitionId(3)));
         assert!(buffer.contains(&TransitionId(4)));
     }
-    
+
     #[test]
     fn test_replay_buffer_duplicate() {
         let mut buffer = ReplayBuffer::new(10);

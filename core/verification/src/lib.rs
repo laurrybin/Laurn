@@ -13,9 +13,9 @@
 // limitations under the License.
 
 use authority::AuthorityEngine;
+use commitment::StateCommitment;
 use epoch::EpochEngine;
 use policy::{EvaluationContext, Policy, PolicyEngine, PolicyRejectionReason, TransitionClass};
-use commitment::StateCommitment;
 use transition::Transition;
 
 pub mod replay;
@@ -75,9 +75,8 @@ impl VerificationEngine {
     /// Extensively verifies a transition by sequentially running it through all LAURN engines.
     #[must_use]
     pub fn verify(&self, ctx: &VerificationContext) -> VerificationResult {
-        
         // 0. Pre-Verification Integrity Checks (Replay & Ordering & Size)
-        
+
         if ctx.raw_payload.len() > MAX_TRANSITION_PAYLOAD_SIZE {
             return VerificationResult::Invalid("Transition payload exceeds maximum allowed size");
         }
@@ -87,7 +86,9 @@ impl VerificationEngine {
         }
 
         if ctx.transition.input_state != ctx.expected_input_state {
-            return VerificationResult::StateMismatch("Transition input state does not match expected active state");
+            return VerificationResult::StateMismatch(
+                "Transition input state does not match expected active state",
+            );
         }
 
         // 1. Epoch Temporal Validation
@@ -96,25 +97,33 @@ impl VerificationEngine {
             &ctx.transition.metadata.epoch_id,
             ctx.transition.metadata.timestamp_ms,
         ) {
-            return VerificationResult::Stale("Epoch is inactive, expired, or transition timestamp is out of bounds");
+            return VerificationResult::Stale(
+                "Epoch is inactive, expired, or transition timestamp is out of bounds",
+            );
         }
 
         // 2. Authority Resolution
         let authority_id = &ctx.transition.metadata.authority_id;
-        
+
         // We must check if the authority exists, and if so, what capabilities they have.
-        // For strictness, if we can't fetch it, we fail. (The engine has check_capability, 
-        // but we need to know if they exist at all before signature verification in a unified way, 
-        // though verify_signature does this too. We will rely on verify_signature for existence 
+        // For strictness, if we can't fetch it, we fail. (The engine has check_capability,
+        // but we need to know if they exist at all before signature verification in a unified way,
+        // though verify_signature does this too. We will rely on verify_signature for existence
         // and a subsequent capability check).
 
         // 3. Cryptographic Signature Validation
         // The signature MUST cover the entire serialized Transition struct to prevent cross-epoch replay attacks.
         let Ok(serialized_transition) = borsh::to_vec(ctx.transition) else {
-            return VerificationResult::Invalid("Failed to serialize transition for signature verification");
+            return VerificationResult::Invalid(
+                "Failed to serialize transition for signature verification",
+            );
         };
 
-        if let Err(e) = ctx.authority_engine.verify_signature(authority_id, &serialized_transition, ctx.signature) {
+        if let Err(e) = ctx.authority_engine.verify_signature(
+            authority_id,
+            &serialized_transition,
+            ctx.signature,
+        ) {
             if e == "Unauthorized authority" {
                 return VerificationResult::Unknown("Authority not registered");
             }
@@ -122,7 +131,9 @@ impl VerificationEngine {
         }
 
         // 4. Policy Engine Evaluation
-        let has_minimum_capability = ctx.authority_engine.check_capability(authority_id, ctx.policy.minimum_capability);
+        let has_minimum_capability = ctx
+            .authority_engine
+            .check_capability(authority_id, ctx.policy.minimum_capability);
         let capabilities = if has_minimum_capability {
             ctx.policy.minimum_capability
         } else {
@@ -144,19 +155,34 @@ impl VerificationEngine {
             policy::PolicyDecision::Accepted => {}
             policy::PolicyDecision::Rejected(reason) => {
                 return match reason {
-                    PolicyRejectionReason::ProtocolVersionMismatch => VerificationResult::Incompatible("Protocol version mismatch"),
-                    PolicyRejectionReason::StateFreshnessViolation => VerificationResult::Stale("State freshness threshold exceeded"),
-                    PolicyRejectionReason::EvidenceMissing => VerificationResult::Incompatible("Required evidence missing"),
-                    PolicyRejectionReason::TransitionClassNotAllowed => VerificationResult::Incompatible("Transition class not permitted by policy"),
-                    PolicyRejectionReason::InsufficientAuthorityCapability => VerificationResult::Incompatible("Authority lacks required capability"),
+                    PolicyRejectionReason::ProtocolVersionMismatch => {
+                        VerificationResult::Incompatible("Protocol version mismatch")
+                    }
+                    PolicyRejectionReason::StateFreshnessViolation => {
+                        VerificationResult::Stale("State freshness threshold exceeded")
+                    }
+                    PolicyRejectionReason::EvidenceMissing => {
+                        VerificationResult::Incompatible("Required evidence missing")
+                    }
+                    PolicyRejectionReason::TransitionClassNotAllowed => {
+                        VerificationResult::Incompatible("Transition class not permitted by policy")
+                    }
+                    PolicyRejectionReason::InsufficientAuthorityCapability => {
+                        VerificationResult::Incompatible("Authority lacks required capability")
+                    }
                 };
             }
         }
 
         // 5. Transition Integrity Validation
         // Ensures the raw payload matches the commitment, and the output state matches what was generated.
-        if !ctx.transition.validate(ctx.raw_payload, ctx.generated_output_state) {
-            return VerificationResult::Invalid("Transition integrity check failed (payload mismatch or output state mismatch)");
+        if !ctx
+            .transition
+            .validate(ctx.raw_payload, ctx.generated_output_state)
+        {
+            return VerificationResult::Invalid(
+                "Transition integrity check failed (payload mismatch or output state mismatch)",
+            );
         }
 
         VerificationResult::Valid
@@ -167,10 +193,10 @@ impl VerificationEngine {
 mod tests {
     use super::*;
     use authority::{Authority, AuthorityCapability, AuthorityId, AuthorityRole};
-    use epoch::{Epoch, EpochId, EpochStatus};
-    use transition::{TransitionCommitment, TransitionId, TransitionMetadata};
     use ed25519_dalek::{Signer, SigningKey};
+    use epoch::{Epoch, EpochId, EpochStatus};
     use rand::rngs::OsRng;
+    use transition::{TransitionCommitment, TransitionId, TransitionMetadata};
 
     fn generate_keypair() -> (SigningKey, AuthorityId) {
         let mut csprng = OsRng;
@@ -197,10 +223,11 @@ mod tests {
         let authority = Authority {
             id: auth_id,
             role: AuthorityRole::Client,
-            capabilities: AuthorityCapability::CAN_SUBMIT_TRANSITION | AuthorityCapability::CAN_SPAWN,
+            capabilities: AuthorityCapability::CAN_SUBMIT_TRANSITION
+                | AuthorityCapability::CAN_SPAWN,
             session_binding: None,
         };
-        auth_engine.register_authority(authority).unwrap();
+        auth_engine.register_authority(authority)?;
 
         let epoch_id = EpochId([1u8; 32]);
         let epoch = Epoch {
@@ -211,8 +238,8 @@ mod tests {
             status: EpochStatus::Pending,
             initial_state: StateCommitment([0u8; 32]),
         };
-        epoch_engine.register_epoch(epoch).unwrap();
-        epoch_engine.activate_epoch(epoch_id).unwrap();
+        epoch_engine.register_epoch(epoch)?;
+        epoch_engine.activate_epoch(epoch_id)?;
 
         let policy = Policy {
             protocol_version: 1,
@@ -253,14 +280,14 @@ mod tests {
     }
 
     #[test]
-    fn test_valid_transition() {
+    fn test_valid_transition() -> Result<(), Box<dyn std::error::Error>> {
         let (auth_engine, epoch_engine, policy_engine, policy, signing_key, auth_id, epoch_id) =
             setup_environment();
 
         let raw_payload = b"move_forward";
         let transition = create_valid_transition(auth_id, epoch_id, 1500, raw_payload);
-        
-        let serialized_transition = borsh::to_vec(&transition).unwrap();
+
+        let serialized_transition = borsh::to_vec(&transition)?;
         let signature = signing_key.sign(&serialized_transition);
 
         let engine = VerificationEngine::new();
@@ -288,18 +315,18 @@ mod tests {
     }
 
     #[test]
-    fn test_invalid_signature() {
+    fn test_invalid_signature() -> Result<(), Box<dyn std::error::Error>> {
         let (auth_engine, epoch_engine, policy_engine, policy, signing_key, auth_id, epoch_id) =
             setup_environment();
 
         let raw_payload = b"move_forward";
         let transition = create_valid_transition(auth_id, epoch_id, 1500, raw_payload);
-        
+
         // We sign a DIFFERENT transition payload
         let mut tampered_transition = transition.clone();
         tampered_transition.id = TransitionId(999); // Tampered!
-        let serialized_tampered = borsh::to_vec(&tampered_transition).unwrap();
-        
+        let serialized_tampered = borsh::to_vec(&tampered_transition)?;
+
         // Sign the tampered data, but submit the original transition. Signature will fail.
         let signature = signing_key.sign(&serialized_tampered);
 
@@ -324,18 +351,21 @@ mod tests {
 
         let result = engine.verify(&ctx);
 
-        assert_eq!(result, VerificationResult::Invalid("Cryptographic signature verification failed"));
+        assert_eq!(
+            result,
+            VerificationResult::Invalid("Cryptographic signature verification failed")
+        );
     }
 
     #[test]
-    fn test_stale_epoch() {
+    fn test_stale_epoch() -> Result<(), Box<dyn std::error::Error>> {
         let (auth_engine, epoch_engine, policy_engine, policy, signing_key, auth_id, epoch_id) =
             setup_environment();
 
         let raw_payload = b"move_forward";
         // Epoch expires at 2000. 2500 is out of bounds.
         let transition = create_valid_transition(auth_id, epoch_id, 2500, raw_payload);
-        let serialized_transition = borsh::to_vec(&transition).unwrap();
+        let serialized_transition = borsh::to_vec(&transition)?;
         let signature = signing_key.sign(&serialized_transition);
 
         let engine = VerificationEngine::new();
@@ -359,11 +389,16 @@ mod tests {
 
         let result = engine.verify(&ctx);
 
-        assert_eq!(result, VerificationResult::Stale("Epoch is inactive, expired, or transition timestamp is out of bounds"));
+        assert_eq!(
+            result,
+            VerificationResult::Stale(
+                "Epoch is inactive, expired, or transition timestamp is out of bounds"
+            )
+        );
     }
 
     #[test]
-    fn test_unknown_authority() {
+    fn test_unknown_authority() -> Result<(), Box<dyn std::error::Error>> {
         let (auth_engine, epoch_engine, policy_engine, policy, _, _, epoch_id) =
             setup_environment();
 
@@ -371,7 +406,7 @@ mod tests {
 
         let raw_payload = b"move_forward";
         let transition = create_valid_transition(unregistered_id, epoch_id, 1500, raw_payload);
-        let serialized_transition = borsh::to_vec(&transition).unwrap();
+        let serialized_transition = borsh::to_vec(&transition)?;
         let signature = unregistered_key.sign(&serialized_transition);
 
         let engine = VerificationEngine::new();
@@ -395,17 +430,20 @@ mod tests {
 
         let result = engine.verify(&ctx);
 
-        assert_eq!(result, VerificationResult::Unknown("Authority not registered"));
+        assert_eq!(
+            result,
+            VerificationResult::Unknown("Authority not registered")
+        );
     }
 
     #[test]
-    fn test_incompatible_policy() {
+    fn test_incompatible_policy() -> Result<(), Box<dyn std::error::Error>> {
         let (auth_engine, epoch_engine, policy_engine, policy, signing_key, auth_id, epoch_id) =
             setup_environment();
 
         let raw_payload = b"move_forward";
         let transition = create_valid_transition(auth_id, epoch_id, 1500, raw_payload);
-        let serialized_transition = borsh::to_vec(&transition).unwrap();
+        let serialized_transition = borsh::to_vec(&transition)?;
         let signature = signing_key.sign(&serialized_transition);
 
         let engine = VerificationEngine::new();
@@ -429,22 +467,25 @@ mod tests {
 
         let result = engine.verify(&ctx);
 
-        assert_eq!(result, VerificationResult::Incompatible("Required evidence missing"));
+        assert_eq!(
+            result,
+            VerificationResult::Incompatible("Required evidence missing")
+        );
     }
 
     #[test]
-    fn test_attack_modified_state() {
+    fn test_attack_modified_state() -> Result<(), Box<dyn std::error::Error>> {
         let (auth_engine, epoch_engine, policy_engine, policy, signing_key, auth_id, epoch_id) =
             setup_environment();
 
         let raw_payload = b"move_forward";
         let transition = create_valid_transition(auth_id, epoch_id, 1500, raw_payload);
-        let serialized_transition = borsh::to_vec(&transition).unwrap();
+        let serialized_transition = borsh::to_vec(&transition)?;
         let signature = signing_key.sign(&serialized_transition);
 
         let engine = VerificationEngine::new();
         let sig_bytes = signature.to_bytes();
-        
+
         let ctx = VerificationContext {
             transition: &transition,
             raw_payload,
@@ -463,22 +504,27 @@ mod tests {
         };
 
         let result = engine.verify(&ctx);
-        assert_eq!(result, VerificationResult::Invalid("Transition integrity check failed (payload mismatch or output state mismatch)"));
+        assert_eq!(
+            result,
+            VerificationResult::Invalid(
+                "Transition integrity check failed (payload mismatch or output state mismatch)"
+            )
+        );
     }
 
     #[test]
-    fn test_attack_reordered_transition() {
+    fn test_attack_reordered_transition() -> Result<(), Box<dyn std::error::Error>> {
         let (auth_engine, epoch_engine, policy_engine, policy, signing_key, auth_id, epoch_id) =
             setup_environment();
 
         let raw_payload = b"move_forward";
         let transition = create_valid_transition(auth_id, epoch_id, 1500, raw_payload);
-        let serialized_transition = borsh::to_vec(&transition).unwrap();
+        let serialized_transition = borsh::to_vec(&transition)?;
         let signature = signing_key.sign(&serialized_transition);
 
         let engine = VerificationEngine::new();
         let sig_bytes = signature.to_bytes();
-        
+
         let ctx = VerificationContext {
             transition: &transition,
             raw_payload,
@@ -497,22 +543,27 @@ mod tests {
         };
 
         let result = engine.verify(&ctx);
-        assert_eq!(result, VerificationResult::StateMismatch("Transition input state does not match expected active state"));
+        assert_eq!(
+            result,
+            VerificationResult::StateMismatch(
+                "Transition input state does not match expected active state"
+            )
+        );
     }
 
     #[test]
-    fn test_attack_duplicated_transition() {
+    fn test_attack_duplicated_transition() -> Result<(), Box<dyn std::error::Error>> {
         let (auth_engine, epoch_engine, policy_engine, policy, signing_key, auth_id, epoch_id) =
             setup_environment();
 
         let raw_payload = b"move_forward";
         let transition = create_valid_transition(auth_id, epoch_id, 1500, raw_payload);
-        let serialized_transition = borsh::to_vec(&transition).unwrap();
+        let serialized_transition = borsh::to_vec(&transition)?;
         let signature = signing_key.sign(&serialized_transition);
 
         let engine = VerificationEngine::new();
         let sig_bytes = signature.to_bytes();
-        
+
         let mut seen = crate::replay::ReplayBuffer::default();
         seen.insert(transition.id); // TRANSITION WAS ALREADY SEEN!
 
@@ -534,11 +585,14 @@ mod tests {
         };
 
         let result = engine.verify(&ctx);
-        assert_eq!(result, VerificationResult::Duplicate("Transition has already been applied"));
+        assert_eq!(
+            result,
+            VerificationResult::Duplicate("Transition has already been applied")
+        );
     }
 
     #[test]
-    fn test_attack_epoch_substitution() {
+    fn test_attack_epoch_substitution() -> Result<(), Box<dyn std::error::Error>> {
         let (auth_engine, epoch_engine, policy_engine, policy, signing_key, auth_id, _) =
             setup_environment();
 
@@ -546,12 +600,12 @@ mod tests {
         // USE AN INVALID EPOCH
         let invalid_epoch_id = EpochId([99u8; 32]);
         let transition = create_valid_transition(auth_id, invalid_epoch_id, 1500, raw_payload);
-        let serialized_transition = borsh::to_vec(&transition).unwrap();
+        let serialized_transition = borsh::to_vec(&transition)?;
         let signature = signing_key.sign(&serialized_transition);
 
         let engine = VerificationEngine::new();
         let sig_bytes = signature.to_bytes();
-        
+
         let ctx = VerificationContext {
             transition: &transition,
             raw_payload,
@@ -570,22 +624,27 @@ mod tests {
         };
 
         let result = engine.verify(&ctx);
-        assert_eq!(result, VerificationResult::Stale("Epoch is inactive, expired, or transition timestamp is out of bounds"));
+        assert_eq!(
+            result,
+            VerificationResult::Stale(
+                "Epoch is inactive, expired, or transition timestamp is out of bounds"
+            )
+        );
     }
 
     #[test]
-    fn test_attack_malformed_payload() {
+    fn test_attack_malformed_payload() -> Result<(), Box<dyn std::error::Error>> {
         let (auth_engine, epoch_engine, policy_engine, policy, signing_key, auth_id, epoch_id) =
             setup_environment();
 
         let raw_payload = b"move_forward";
         let transition = create_valid_transition(auth_id, epoch_id, 1500, raw_payload);
-        let serialized_transition = borsh::to_vec(&transition).unwrap();
+        let serialized_transition = borsh::to_vec(&transition)?;
         let signature = signing_key.sign(&serialized_transition);
 
         let engine = VerificationEngine::new();
         let sig_bytes = signature.to_bytes();
-        
+
         let malformed_payload = b"move_backward"; // MALFORMED PAYLOAD SUPPLIED!
 
         let ctx = VerificationContext {
@@ -606,6 +665,11 @@ mod tests {
         };
 
         let result = engine.verify(&ctx);
-        assert_eq!(result, VerificationResult::Invalid("Transition integrity check failed (payload mismatch or output state mismatch)"));
+        assert_eq!(
+            result,
+            VerificationResult::Invalid(
+                "Transition integrity check failed (payload mismatch or output state mismatch)"
+            )
+        );
     }
 }

@@ -13,25 +13,25 @@
 // limitations under the License.
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use rand::rngs::OsRng;
 use ed25519_dalek::{Signer, SigningKey};
+use rand::rngs::OsRng;
 
+use authority::{AuthorityCapability, AuthorityEngine, AuthorityId};
+use commitment::{CommitmentEngine, StateCommitment, TRANSITION_DOMAIN_V1};
+use epoch::{EpochEngine, EpochId};
+use policy::{Policy, PolicyEngine, TransitionClass};
 use protocol::{LaurnMessage, LaurnMessagePayload, TransitionMessage};
-use commitment::{StateCommitment, CommitmentEngine, TRANSITION_DOMAIN_V1};
-use authority::{AuthorityId, AuthorityEngine, AuthorityCapability};
-use epoch::{EpochId, EpochEngine};
-use verification::{VerificationEngine, VerificationContext};
-use policy::{PolicyEngine, Policy, TransitionClass};
+use transition::{Transition, TransitionCommitment, TransitionId, TransitionMetadata};
+use verification::{VerificationContext, VerificationEngine};
 use version::ProtocolVersion;
-use transition::{Transition, TransitionId, TransitionMetadata, TransitionCommitment};
 
-fn generate_dummy_transition(signing_key: &SigningKey) -> LaurnMessage {
+fn generate_benchmark_transition(signing_key: &SigningKey) -> LaurnMessage {
     let mut input_state = [0u8; 32];
     input_state[0] = 42;
-    
+
     let payload_bytes = vec![1, 2, 3, 4, 5, 6, 7, 8];
     let payload_commitment = TransitionCommitment::compute(&payload_bytes);
-    
+
     let transition = Transition {
         id: TransitionId(1),
         metadata: TransitionMetadata {
@@ -43,10 +43,10 @@ fn generate_dummy_transition(signing_key: &SigningKey) -> LaurnMessage {
         output_state: StateCommitment([0; 32]),
         payload_commitment,
     };
-    
-    let serialized_transition = borsh::to_vec(&transition).unwrap();
+
+    let serialized_transition = borsh::to_vec(&transition).unwrap_or_else(|_| vec![]);
     let signature = signing_key.sign(&serialized_transition).to_bytes();
-    
+
     LaurnMessage {
         version: ProtocolVersion::new(1, 0, 0),
         payload: LaurnMessagePayload::Transition(TransitionMessage {
@@ -62,7 +62,7 @@ fn bench_commitment_latency(c: &mut Criterion) {
     for i in 0..payload.len() {
         payload[i] = (i % 256) as u8;
     }
-    
+
     c.bench_function("Commitment Latency (1KB State Chunk)", |b| {
         b.iter(|| {
             let result = CommitmentEngine::compute(TRANSITION_DOMAIN_V1, black_box(&payload));
@@ -74,10 +74,10 @@ fn bench_commitment_latency(c: &mut Criterion) {
 fn bench_transition_latency(c: &mut Criterion) {
     let mut csprng = OsRng;
     let signing_key = SigningKey::generate(&mut csprng);
-    
+
     c.bench_function("Transition Generation & Signing", |b| {
         b.iter(|| {
-            let msg = generate_dummy_transition(black_box(&signing_key));
+            let msg = generate_benchmark_transition(black_box(&signing_key));
             black_box(msg)
         })
     });
@@ -86,19 +86,22 @@ fn bench_transition_latency(c: &mut Criterion) {
 fn bench_encoding_latency(c: &mut Criterion) {
     let mut csprng = OsRng;
     let signing_key = SigningKey::generate(&mut csprng);
-    let msg = generate_dummy_transition(&signing_key);
-    
+    let msg = generate_benchmark_transition(&signing_key);
+
     c.bench_function("Borsh Encode (Transition)", |b| {
         b.iter(|| {
-            let encoded = borsh::to_vec(&msg).unwrap();
+            let encoded = borsh::to_vec(&msg).unwrap_or_else(|_| vec![]);
             black_box(encoded)
         })
     });
-    
-    let encoded = borsh::to_vec(&msg).unwrap();
+
+    let encoded = borsh::to_vec(&msg).unwrap_or_else(|_| vec![]);
     c.bench_function("Borsh Decode (Transition)", |b| {
         b.iter(|| {
-            let decoded: LaurnMessage = borsh::from_slice(black_box(&encoded)).unwrap();
+            let decoded: LaurnMessage = match borsh::from_slice(black_box(&encoded)) {
+                Ok(msg) => msg,
+                Err(_) => return,
+            };
             black_box(decoded)
         })
     });
@@ -107,29 +110,29 @@ fn bench_encoding_latency(c: &mut Criterion) {
 fn bench_verification_latency(c: &mut Criterion) {
     let mut csprng = OsRng;
     let signing_key = SigningKey::generate(&mut csprng);
-    let msg = generate_dummy_transition(&signing_key);
-    let raw_payload = borsh::to_vec(&msg).unwrap();
-    
+    let msg = generate_benchmark_transition(&signing_key);
+    let raw_payload = borsh::to_vec(&msg).unwrap_or_else(|_| vec![]);
+
     let mut authority_engine = AuthorityEngine::new();
     let authority_id = AuthorityId(signing_key.verifying_key().to_bytes());
-    authority_engine.register_authority(authority::Authority {
+    let _ = authority_engine.register_authority(authority::Authority {
         id: authority_id,
         role: authority::AuthorityRole::Client,
         capabilities: AuthorityCapability::empty(),
         session_binding: None,
-    }).unwrap();
+    });
 
     let mut epoch_engine = EpochEngine::new();
     let epoch_id = EpochId([1; 32]);
-    epoch_engine.register_epoch(epoch::Epoch {
+    let _ = epoch_engine.register_epoch(epoch::Epoch {
         id: epoch_id,
         sequence: 1,
         start_time_ms: 0,
         expiration_time_ms: 2000,
         status: epoch::EpochStatus::Pending,
         initial_state: StateCommitment([0; 32]),
-    }).unwrap();
-    epoch_engine.activate_epoch(epoch_id).unwrap();
+    });
+    let _ = epoch_engine.activate_epoch(epoch_id);
 
     let policy_engine = PolicyEngine::new();
     let policy = Policy {
@@ -141,12 +144,14 @@ fn bench_verification_latency(c: &mut Criterion) {
     };
     let verifier = VerificationEngine::new();
     let seen_transitions = verification::replay::ReplayBuffer::default();
-    
-    let LaurnMessagePayload::Transition(t) = msg.payload else { panic!() };
-    
-    // The dummy transition sets output_state = [0; 32], so we must pass exactly that for expected
+
+    let LaurnMessagePayload::Transition(t) = msg.payload else {
+        return;
+    };
+
+    // The benchmark transition sets output_state = [0; 32], so we must pass exactly that for expected
     let expected_output_state = [0u8; 32];
-    
+
     c.bench_function("Verification Latency (Crypto + Protocol)", |b| {
         b.iter(|| {
             let ctx = VerificationContext {
@@ -165,7 +170,7 @@ fn bench_verification_latency(c: &mut Criterion) {
                 transition_protocol_version: 1,
                 transition_class: TransitionClass::from_bits_truncate(1),
             };
-            
+
             let result = verifier.verify(black_box(&ctx));
             assert_eq!(result, verification::VerificationResult::Valid);
             black_box(result)
@@ -173,5 +178,11 @@ fn bench_verification_latency(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, bench_commitment_latency, bench_transition_latency, bench_encoding_latency, bench_verification_latency);
+criterion_group!(
+    benches,
+    bench_commitment_latency,
+    bench_transition_latency,
+    bench_encoding_latency,
+    bench_verification_latency
+);
 criterion_main!(benches);

@@ -57,7 +57,7 @@ impl PartialEq for TransitionCommitment {
 pub struct TransitionId(pub u64);
 
 /// Metadata associated with a Transition, carrying authority and temporal information.
-/// Timestamps are strictly represented as `u64` (e.g., milliseconds since Unix Epoch) 
+/// Timestamps are strictly represented as `u64` (e.g., milliseconds since Unix Epoch)
 /// to avoid floating point non-determinism across platforms.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
 #[repr(C)]
@@ -69,7 +69,7 @@ pub struct TransitionMetadata {
 
 /// A verifiable transition linking `State[n]` to `State[n+1]`.
 ///
-/// This struct holds the cryptographic commitments of the inputs and outputs, rather than 
+/// This struct holds the cryptographic commitments of the inputs and outputs, rather than
 /// the raw payloads, keeping it lightweight.
 #[derive(Debug, Clone, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
 pub struct Transition {
@@ -81,17 +81,13 @@ pub struct Transition {
 }
 
 impl Transition {
-    /// Validates the transition by proving that the provided raw payload matches the `payload_commitment` 
+    /// Validates the transition by proving that the provided raw payload matches the `payload_commitment`
     /// and that executing the payload on `input_state` legitimately yields `output_state`.
-    /// 
-    /// In Phase 05, this simply validates the cryptographic integrity of the payload commitment 
+    ///
+    /// In Phase 05, this simply validates the cryptographic integrity of the payload commitment
     /// and the matching generated output state. Future phases will integrate the WASM execution engine here.
     #[must_use]
-    pub fn validate(
-        &self,
-        raw_payload: &[u8],
-        generated_output_state: StateCommitment,
-    ) -> bool {
+    pub fn validate(&self, raw_payload: &[u8], generated_output_state: StateCommitment) -> bool {
         // 1. Verify the payload matches the commitment
         let computed_payload_commitment = TransitionCommitment::compute(raw_payload);
         if self.payload_commitment != computed_payload_commitment {
@@ -129,16 +125,16 @@ mod tests {
     fn test_transition_validation() {
         let raw_payload = b"jump action";
         let valid_payload_commitment = TransitionCommitment::compute(raw_payload);
-        
+
         let input_state = StateCommitment([1u8; 32]);
         let output_state = StateCommitment([2u8; 32]);
-        
+
         let metadata = TransitionMetadata {
             authority_id: AuthorityId([0u8; 32]),
             epoch_id: EpochId([1u8; 32]),
             timestamp_ms: 1622548800000,
         };
-        
+
         let transition = Transition {
             id: TransitionId(42),
             metadata,

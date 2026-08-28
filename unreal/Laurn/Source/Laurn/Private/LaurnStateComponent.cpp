@@ -59,9 +59,17 @@ void ULaurnStateComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 
 void ULaurnStateComponent::SerializeCanonicalState(TArray<uint8>& OutBuffer) const
 {
-	// Write the StateId (4 bytes, little endian assumed for most UE platforms)
-	// For true cross-platform determinism, one could force explicit little-endian bitshifts here.
-	OutBuffer.Append(reinterpret_cast<const uint8*>(&StateId), sizeof(uint32));
+	auto AppendInt32LE = [&OutBuffer](int32 Value) {
+		uint8 Bytes[4];
+		Bytes[0] = static_cast<uint8>((Value >> 0) & 0xFF);
+		Bytes[1] = static_cast<uint8>((Value >> 8) & 0xFF);
+		Bytes[2] = static_cast<uint8>((Value >> 16) & 0xFF);
+		Bytes[3] = static_cast<uint8>((Value >> 24) & 0xFF);
+		OutBuffer.Append(Bytes, 4);
+	};
+
+	// Write the StateId (4 bytes, explicitly little-endian)
+	AppendInt32LE(static_cast<int32>(StateId));
 
 	if (bTrackTransform)
 	{
@@ -69,7 +77,14 @@ void ULaurnStateComponent::SerializeCanonicalState(TArray<uint8>& OutBuffer) con
 		if (Owner)
 		{
 			FLaurnQuantizedTransform QTransform = FLaurnQuantizedTransform::FromFTransform(Owner->GetActorTransform());
-			OutBuffer.Append(reinterpret_cast<const uint8*>(&QTransform), sizeof(FLaurnQuantizedTransform));
+			
+			AppendInt32LE(QTransform.Location.X);
+			AppendInt32LE(QTransform.Location.Y);
+			AppendInt32LE(QTransform.Location.Z);
+			
+			AppendInt32LE(QTransform.Rotation.Pitch);
+			AppendInt32LE(QTransform.Rotation.Yaw);
+			AppendInt32LE(QTransform.Rotation.Roll);
 		}
 	}
 

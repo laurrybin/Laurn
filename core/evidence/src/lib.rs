@@ -14,9 +14,9 @@
 
 use authority::AuthorityId;
 use borsh::{BorshDeserialize, BorshSerialize};
-use transition::TransitionCommitment;
-use ed25519_dalek::{Signature, VerifyingKey, Verifier};
+use ed25519_dalek::{Signature, Verifier, VerifyingKey};
 use epoch::EpochId;
+use transition::TransitionCommitment;
 
 pub mod platform;
 
@@ -66,23 +66,23 @@ impl ExecutionEvidence {
         let mut payload = Vec::new();
         payload.extend_from_slice(EVIDENCE_DOMAIN_V1);
         payload.extend_from_slice(&self.id.0);
-        
+
         let type_byte = match self.evidence_type {
             EvidenceType::ServerAuthoritative => 0,
             EvidenceType::IntelSgx => 1,
             EvidenceType::AwsNitro => 2,
         };
         payload.push(type_byte);
-        
+
         payload.extend_from_slice(&self.issuer.0);
         payload.extend_from_slice(&self.epoch_id.0);
         payload.extend_from_slice(&self.timestamp_ms.to_le_bytes());
         payload.extend_from_slice(self.transition_commitment.as_bytes());
-        
+
         // Include the hash of the raw attestation to bind it without copying potentially large bytes
         let attestation_hash = blake3::hash(&self.raw_attestation);
         payload.extend_from_slice(attestation_hash.as_bytes());
-        
+
         payload
     }
 
@@ -101,7 +101,7 @@ impl ExecutionEvidence {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ed25519_dalek::{SigningKey, Signer};
+    use ed25519_dalek::{Signer, SigningKey};
     use rand::rngs::OsRng;
 
     #[test]
@@ -109,7 +109,7 @@ mod tests {
         let mut csprng = OsRng;
         let signing_key = SigningKey::generate(&mut csprng);
         let verifying_key = signing_key.verifying_key();
-        
+
         let issuer_bytes = verifying_key.to_bytes();
         let issuer = AuthorityId(issuer_bytes);
 
@@ -136,7 +136,7 @@ mod tests {
         let mut csprng = OsRng;
         let signing_key = SigningKey::generate(&mut csprng);
         let verifying_key = signing_key.verifying_key();
-        
+
         let issuer = AuthorityId(verifying_key.to_bytes());
 
         let mut evidence = ExecutionEvidence {

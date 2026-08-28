@@ -16,9 +16,9 @@ use clap::{Parser, Subcommand};
 use std::fs;
 use std::path::PathBuf;
 
-use protocol::LaurnMessage;
-use replay::{ReplayReader, divergence::DivergenceAnalyzer};
 use borsh::BorshDeserialize;
+use protocol::LaurnMessage;
+use replay::{divergence::DivergenceAnalyzer, ReplayReader};
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -56,32 +56,44 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Commands::Dump { replay_file } => {
             let buffer = fs::read(replay_file)?;
             let mut reader = ReplayReader::new(&buffer)?;
-            
+
             println!("========================================");
             println!("LAURN SESSION REPLAY DUMP");
             println!("========================================");
             println!("Version: {}", reader.header.version);
             println!("Total Frames: {}", reader.total_frames);
-            println!("Initial State: {}", hex::encode(reader.header.initial_state.0));
+            println!(
+                "Initial State: {}",
+                hex::encode(reader.header.initial_state.0)
+            );
             println!("----------------------------------------");
-            
+
             while let Some(frame) = reader.next_frame()? {
                 let msg = match LaurnMessage::try_from_slice(&frame.raw_payload) {
                     Ok(m) => m,
                     Err(_) => {
-                        println!("Frame {}: FAILED TO DECODE MESSAGE", reader.current_frame - 1);
+                        println!(
+                            "Frame {}: FAILED TO DECODE MESSAGE",
+                            reader.current_frame - 1
+                        );
                         continue;
                     }
                 };
-                
+
                 println!("Frame {}", reader.current_frame - 1);
-                println!("  Expected Output State: {}", hex::encode(frame.expected_output_state.0));
-                
+                println!(
+                    "  Expected Output State: {}",
+                    hex::encode(frame.expected_output_state.0)
+                );
+
                 match msg.payload {
                     protocol::LaurnMessagePayload::Transition(t) => {
                         println!("  Transition ID: {:?}", t.transition.id);
                         println!("  Epoch: {:?}", t.transition.metadata.epoch_id.0);
-                        println!("  Authority: {}", hex::encode(t.transition.metadata.authority_id.0));
+                        println!(
+                            "  Authority: {}",
+                            hex::encode(t.transition.metadata.authority_id.0)
+                        );
                         println!("  Input State: {}", hex::encode(t.transition.input_state.0));
                         println!("  Timestamp (ms): {}", t.transition.metadata.timestamp_ms);
                     }
@@ -95,16 +107,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Commands::Verify { replay_file } => {
             let buffer = fs::read(replay_file)?;
             let mut reader = ReplayReader::new(&buffer)?;
-            
+
             println!("========================================");
             println!("LAURN REPLAY VERIFICATION");
             println!("========================================");
-            
+
             use authority::AuthorityEngine;
             use epoch::EpochEngine;
-            use policy::{PolicyEngine, Policy, TransitionClass};
-            use verification::{VerificationEngine, VerificationContext};
-            
+            use policy::{Policy, PolicyEngine, TransitionClass};
+            use verification::{VerificationContext, VerificationEngine};
+
             let authority_engine = AuthorityEngine::new();
             let epoch_engine = EpochEngine::new();
             let policy_engine = PolicyEngine::new();
@@ -116,23 +128,29 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 minimum_capability: authority::AuthorityCapability::empty(),
             };
             let verifier = VerificationEngine::new();
-            
+
             let mut seen_transitions = verification::replay::ReplayBuffer::default();
-            
+
             while let Some(frame) = reader.next_frame()? {
                 let msg = match LaurnMessage::try_from_slice(&frame.raw_payload) {
                     Ok(m) => m,
                     Err(_) => {
-                        println!("Frame {}: VERIFICATION FAILED (Decode Error)", reader.current_frame - 1);
+                        println!(
+                            "Frame {}: VERIFICATION FAILED (Decode Error)",
+                            reader.current_frame - 1
+                        );
                         continue;
                     }
                 };
-                
+
                 let protocol::LaurnMessagePayload::Transition(t) = msg.payload else {
-                    println!("Frame {}: IGNORED (Not a Transition)", reader.current_frame - 1);
+                    println!(
+                        "Frame {}: IGNORED (Not a Transition)",
+                        reader.current_frame - 1
+                    );
                     continue;
                 };
-                
+
                 let ctx = VerificationContext {
                     transition: &t.transition,
                     raw_payload: &frame.raw_payload,
@@ -149,23 +167,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     transition_protocol_version: 1,
                     transition_class: TransitionClass::from_bits_truncate(1),
                 };
-                
+
                 let result = verifier.verify(&ctx);
                 println!("Frame {}: {:?}", reader.current_frame - 1, result);
                 seen_transitions.insert(t.transition.id);
             }
         }
-        Commands::Diverge { auth_file, test_file } => {
+        Commands::Diverge {
+            auth_file,
+            test_file,
+        } => {
             let auth_buffer = fs::read(auth_file)?;
             let test_buffer = fs::read(test_file)?;
-            
+
             let mut auth_reader = ReplayReader::new(&auth_buffer)?;
             let mut test_reader = ReplayReader::new(&test_buffer)?;
-            
+
             println!("========================================");
             println!("LAURN DIVERGENCE ANALYSIS");
             println!("========================================");
-            
+
             if let Some(report) = DivergenceAnalyzer::analyze(&mut auth_reader, &mut test_reader) {
                 println!("DIVERGENCE DETECTED at Frame {}:", report.frame_index);
                 use replay::divergence::DivergenceReason::*;
@@ -193,7 +214,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     PayloadMismatch => {
                         println!("  Reason: Unspecified Payload Mismatch");
                     }
-                    LengthMismatch { expected_frames, actual_frames } => {
+                    LengthMismatch {
+                        expected_frames,
+                        actual_frames,
+                    } => {
                         println!("  Reason: Length Mismatch");
                         println!("  Expected Frames (Auth): {}", expected_frames);
                         println!("  Actual Frames   (Test): {}", actual_frames);

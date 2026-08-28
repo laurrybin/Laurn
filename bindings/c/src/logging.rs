@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use log::{LevelFilter, Log, Metadata, Record};
 use std::os::raw::c_char;
-use std::sync::atomic::{AtomicPtr, Ordering};
 use std::ptr;
-use log::{Log, Metadata, Record, LevelFilter};
+use std::sync::atomic::{AtomicPtr, Ordering};
 
 pub type LaurnLogCallback = unsafe extern "C" fn(level: i32, msg: *const c_char);
 

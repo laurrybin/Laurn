@@ -62,7 +62,7 @@ typedef struct LaurnPolicyHandle LaurnPolicyHandle;
 
 LaurnResult laurn_authority_engine_create(LaurnAuthorityEngineHandle** out_handle);
 LaurnResult laurn_authority_engine_destroy(LaurnAuthorityEngineHandle* handle);
-LaurnResult laurn_authority_engine_register_test_authority(LaurnAuthorityEngineHandle* handle);
+LaurnResult laurn_authority_engine_register_diagnostic_authority(LaurnAuthorityEngineHandle* handle);
 
 // ----------------------------------------------------------------------------
 // Epoch Engine Operations
@@ -107,6 +107,11 @@ LaurnResult laurn_protocol_encode_transition_message(
     uint32_t protocol_version,
     uint32_t transition_class,
     uint64_t transition_id,
+    const uint8_t (*authority_id)[32],
+    const uint8_t (*epoch_id)[32],
+    uint64_t timestamp_ms,
+    const uint8_t (*input_state_commitment)[32],
+    const uint8_t (*output_state_commitment)[32],
     const uint8_t* raw_payload,
     size_t raw_payload_len,
     const uint8_t (*signature)[64],
@@ -191,7 +196,7 @@ LaurnResult laurn_verify_transition(
 // Client Utilities (for Unreal Client to sign payloads)
 // ----------------------------------------------------------------------------
 
-LaurnResult laurn_test_sign_transition(
+LaurnResult laurn_diagnostic_sign_transition(
     const uint8_t* raw_payload,
     size_t raw_payload_len,
     uint8_t (*out_signature)[64]

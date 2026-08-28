@@ -139,13 +139,27 @@ impl DeterministicVector3 {
     }
 }
 
+/// A deterministic quaternion utilizing fixed-point arithmetic.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
+pub struct DeterministicQuaternion {
+    pub x: I48F16,
+    pub y: I48F16,
+    pub z: I48F16,
+    pub w: I48F16,
+}
+
+impl DeterministicQuaternion {
+    #[must_use]
+    pub const fn new(x: I48F16, y: I48F16, z: I48F16, w: I48F16) -> Self {
+        Self { x, y, z, w }
+    }
+}
+
 /// A deterministic Transform utilizing fixed-point arithmetic.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
 pub struct DeterministicTransform {
     pub location: DeterministicVector3,
-    // Note: Rotations in LAURN are stored deterministically. In practice, Quaternions or Euler angles
-    // quantized to fixed-point are used. We represent this as a Vector3 of Euler angles for simplicity.
-    pub rotation: DeterministicVector3, 
+    pub rotation: DeterministicQuaternion,
     pub scale: DeterministicVector3,
 }
 
@@ -153,7 +167,7 @@ impl DeterministicTransform {
     #[must_use]
     pub const fn new(
         location: DeterministicVector3,
-        rotation: DeterministicVector3,
+        rotation: DeterministicQuaternion,
         scale: DeterministicVector3,
     ) -> Self {
         Self {
@@ -169,7 +183,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_canonical_f32_rejects_nan() {
+    fn test_canonical_f32_rejects_nan() -> Result<(), Box<dyn std::error::Error>> {
         assert!(CanonicalF32::new(f32::NAN).is_err());
         assert!(CanonicalF32::new(f32::INFINITY).is_err());
         assert!(CanonicalF32::new(f32::NEG_INFINITY).is_err());
@@ -177,40 +191,40 @@ mod tests {
     }
 
     #[test]
-    fn test_canonical_f32_negative_zero() {
-        let neg_zero = CanonicalF32::new(-0.0).unwrap();
-        let pos_zero = CanonicalF32::new(0.0).unwrap();
-        
+    fn test_canonical_f32_negative_zero() -> Result<(), Box<dyn std::error::Error>> {
+        let neg_zero = CanonicalF32::new(-0.0)?;
+        let pos_zero = CanonicalF32::new(0.0)?;
+
         // Assert they evaluate to equal
         assert_eq!(neg_zero, pos_zero);
-        
+
         // Assert the internal representation is exactly positive zero
         assert!(neg_zero.get().is_sign_positive());
     }
 
     #[test]
-    fn test_canonical_f32_serialization_determinism() {
-        let val1 = CanonicalF32::new(-0.0).unwrap();
-        let val2 = CanonicalF32::new(0.0).unwrap();
-        
-        let bytes1 = borsh::to_vec(&val1).unwrap();
-        let bytes2 = borsh::to_vec(&val2).unwrap();
-        
+    fn test_canonical_f32_serialization_determinism() -> Result<(), Box<dyn std::error::Error>> {
+        let val1 = CanonicalF32::new(-0.0)?;
+        let val2 = CanonicalF32::new(0.0)?;
+
+        let bytes1 = borsh::to_vec(&val1)?;
+        let bytes2 = borsh::to_vec(&val2)?;
+
         assert_eq!(bytes1, bytes2);
     }
 
     #[test]
-    fn test_quantized_vector_determinism() {
+    fn test_quantized_vector_determinism() -> Result<(), Box<dyn std::error::Error>> {
         // This test ensures `I48F16` float conversions serialize identically
-        let vec1 = DeterministicVector3::quantize(123.456, -0.0, 99.99).unwrap();
-        
+        let vec1 = DeterministicVector3::quantize(123.456, -0.0, 99.99)?;
+
         // Slightly different floats but within quantization boundary might not be identical,
         // but identical floats must yield identical quantized bytes.
-        let vec2 = DeterministicVector3::quantize(123.456, 0.0, 99.99).unwrap();
-        
-        let bytes1 = borsh::to_vec(&vec1).unwrap();
-        let bytes2 = borsh::to_vec(&vec2).unwrap();
-        
+        let vec2 = DeterministicVector3::quantize(123.456, 0.0, 99.99)?;
+
+        let bytes1 = borsh::to_vec(&vec1)?;
+        let bytes2 = borsh::to_vec(&vec2)?;
+
         assert_eq!(bytes1, bytes2);
     }
 }

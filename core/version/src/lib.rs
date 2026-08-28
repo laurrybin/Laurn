@@ -34,7 +34,7 @@ impl ProtocolVersion {
             patch,
         }
     }
-    
+
     /// Returns the current protocol version.
     #[must_use]
     pub const fn current() -> Self {

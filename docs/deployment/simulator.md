@@ -4,7 +4,7 @@ The `tools/` directory contains CLI applications for deploying, validating, and 
 
 ## `laurn-simulator`
 
-The simulator runs a headless, deterministic mock simulation to validate the engine's integrity. It pushes random (but seeded) transitions into the core and verifies that the resulting commitments match expected hashes.
+The simulator runs a headless, deterministic synthetic simulation to validate the engine's integrity. It pushes random (but seeded) transitions into the core and verifies that the resulting commitments match expected hashes.
 
 ### Usage
 ```bash

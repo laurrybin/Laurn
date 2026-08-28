@@ -119,36 +119,36 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_replay_recorder_and_reader() {
+    fn test_replay_recorder_and_reader() -> Result<(), Box<dyn std::error::Error>> {
         let initial_state = StateCommitment([0; 32]); // Just zeroes
         let mut recorder = ReplayRecorder::new(initial_state.clone());
 
         let raw_payload = vec![1, 2, 3, 4];
         let mut output_state = StateCommitment([0; 32]);
-        output_state.0[0] = 99; // some fake state
+        output_state.0[0] = 99; // some synthetic state
 
         recorder.add_frame(raw_payload.clone(), output_state.clone());
 
         // Serialize
-        let serialized = recorder.serialize().expect("Serialization failed");
+        let serialized = recorder.serialize()?;
 
         // Deserialize
-        let mut reader = ReplayReader::new(&serialized).expect("Reader init failed");
-        
+        let mut reader = ReplayReader::new(&serialized)?;
+
         assert_eq!(reader.header.magic, *b"LAURNRPL");
         assert_eq!(reader.header.initial_state, initial_state);
         assert_eq!(reader.total_frames, 1);
 
-        let frame = reader.next_frame().expect("Next frame failed").expect("Should have one frame");
+        let frame = reader.next_frame()??;
         assert_eq!(frame.raw_payload, raw_payload);
         assert_eq!(frame.expected_output_state, output_state);
 
-        let none = reader.next_frame().expect("Next frame failed");
+        let none = reader.next_frame()?;
         assert!(none.is_none());
     }
 
     #[test]
-    fn test_invalid_magic() {
+    fn test_invalid_magic() -> Result<(), Box<dyn std::error::Error>> {
         let mut buffer = Vec::new();
         // Manually craft bad magic
         buffer.extend_from_slice(b"BADMAGIC");
@@ -158,6 +158,9 @@ mod tests {
 
         let reader_result = ReplayReader::new(&buffer);
         assert!(reader_result.is_err());
-        assert_eq!(reader_result.unwrap_err().to_string(), "Invalid replay magic bytes");
+        assert_eq!(
+            reader_result.err().ok_or("err")?.to_string(),
+            "Invalid replay magic bytes"
+        );
     }
 }

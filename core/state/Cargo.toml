@@ -12,6 +12,7 @@ version_crate = { path = "../version", package = "version" }
 epoch = { path = "../epoch" }
 authority = { path = "../authority" }
 commitment = { path = "../commitment" }
+delta = { path = "../delta" }
 
 [lints]
 workspace = true

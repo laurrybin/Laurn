@@ -46,11 +46,11 @@ impl LaurnCodec {
     /// Returns `CodecError::SerializationFailed` if the underlying borsh serialization fails.
     pub fn encode(message: &LaurnMessage) -> Result<Vec<u8>, CodecError> {
         let payload = borsh::to_vec(message).map_err(|_| CodecError::SerializationFailed)?;
-        
+
         // Ensure we don't try to encode something larger than u32::MAX
         // (and logically, it shouldn't be larger than MAX_MESSAGE_SIZE).
         let len = u32::try_from(payload.len()).map_err(|_| CodecError::SerializationFailed)?;
-        
+
         if len > MAX_MESSAGE_SIZE {
             return Err(CodecError::MessageTooLarge(len));
         }
@@ -59,7 +59,7 @@ impl LaurnCodec {
         frame.extend_from_slice(&MAGIC_BYTES);
         frame.extend_from_slice(&len.to_le_bytes());
         frame.extend_from_slice(&payload);
-        
+
         Ok(frame)
     }
 
@@ -119,19 +119,19 @@ mod tests {
     }
 
     #[test]
-    fn test_round_trip() {
+    fn test_round_trip() -> Result<(), Box<dyn std::error::Error>> {
         let msg = create_test_message();
-        let encoded = LaurnCodec::encode(&msg).unwrap();
-        let (decoded, consumed) = LaurnCodec::decode(&encoded).unwrap();
+        let encoded = LaurnCodec::encode(&msg)?;
+        let (decoded, consumed) = LaurnCodec::decode(&encoded)?;
 
         assert_eq!(msg, decoded);
         assert_eq!(consumed, encoded.len());
     }
 
     #[test]
-    fn test_incomplete_message() {
+    fn test_incomplete_message() -> Result<(), Box<dyn std::error::Error>> {
         let msg = create_test_message();
-        let encoded = LaurnCodec::encode(&msg).unwrap();
+        let encoded = LaurnCodec::encode(&msg)?;
 
         // Truncate at exactly 7 bytes (missing length)
         let result = LaurnCodec::decode(&encoded[0..7]);
@@ -143,19 +143,19 @@ mod tests {
     }
 
     #[test]
-    fn test_invalid_magic_bytes() {
+    fn test_invalid_magic_bytes() -> Result<(), Box<dyn std::error::Error>> {
         let msg = create_test_message();
-        let mut encoded = LaurnCodec::encode(&msg).unwrap();
-        
+        let mut encoded = LaurnCodec::encode(&msg)?;
+
         // Corrupt magic bytes
         encoded[0] = b'X';
-        
+
         let result = LaurnCodec::decode(&encoded);
         assert_eq!(result, Err(CodecError::InvalidMagicBytes));
     }
 
     #[test]
-    fn test_oversized_message_rejection() {
+    fn test_oversized_message_rejection() -> Result<(), Box<dyn std::error::Error>> {
         // Create a header claiming to be 20 MB, which is > MAX_MESSAGE_SIZE
         let massive_len = 20 * 1024 * 1024_u32;
         let mut frame = Vec::new();
@@ -170,10 +170,10 @@ mod tests {
     }
 
     #[test]
-    fn test_malformed_payload() {
+    fn test_malformed_payload() -> Result<(), Box<dyn std::error::Error>> {
         let msg = create_test_message();
-        let mut encoded = LaurnCodec::encode(&msg).unwrap();
-        
+        let mut encoded = LaurnCodec::encode(&msg)?;
+
         // Corrupt the enum discriminant of LaurnMessagePayload
         // Frame:
         // 0..4: Magic LRN1

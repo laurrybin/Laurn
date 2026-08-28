@@ -12,17 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![no_main]
-use delta::StateDelta;
-use libfuzzer_sys::fuzz_target;
+#pragma once
+#include "CoreMinimal.h"
+#include "GameFramework/GameModeBase.h"
+#include "ExampleGameMode.generated.h"
 
-fuzz_target!(|data: &[u8]| {
-    // Attempt to decode the raw bytes as a StateDelta
-    if let Ok(delta) = borsh::from_slice::<StateDelta>(data) {
-        // Evaluate the bounds to ensure no panics or algorithmic complexity hangs occur
-        let _ = delta.validate_bounds();
-
-        // Ensure we can re-encode it without panicking
-        let _ = borsh::to_vec(&delta);
-    }
-});
+UCLASS()
+class LAURNEXAMPLE_API AExampleGameMode : public AGameModeBase
+{
+    GENERATED_BODY()
+public:
+    AExampleGameMode();
+};

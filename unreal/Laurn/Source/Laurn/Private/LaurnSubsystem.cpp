@@ -35,8 +35,8 @@ void ULaurnSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	}
 	else
 	{
-		// For deterministic testing, register the test authority with the engine
-		laurn_authority_engine_register_test_authority(AuthorityEngine);
+		// For deterministic diagnostics, register the diagnostic authority with the engine
+		laurn_authority_engine_register_diagnostic_authority(AuthorityEngine);
 	}
 
 	// Create Epoch Engine
@@ -117,7 +117,7 @@ bool ULaurnSubsystem::ComputeStateCommitment(const TArray<uint8>& StateBuffer, T
 	LaurnResult Result = laurn_state_commitment_compute(
 		StateBuffer.GetData(),
 		StateBuffer.Num(),
-		reinterpret_cast<uint8_t(*)[32]>(OutHash.GetData())
+		static_cast<uint8_t(*)[32]>(static_cast<void*>(OutHash.GetData()))
 	);
 
 	if (Result != LAURN_SUCCESS)
@@ -237,7 +237,7 @@ bool ULaurnSubsystem::VerifyIncomingTransition(const TArray<uint8>& TransitionPa
 	Params.signature = &Signature;
 	uint8_t ZeroState[32] = {0};
 	Params.expected_input_state = &ZeroState;
-	Params.generated_output_state = reinterpret_cast<uint8_t(*)[32]>(OutputStateHash.GetData());
+	Params.generated_output_state = static_cast<uint8_t(*)[32]>(static_cast<void*>(OutputStateHash.GetData()));
 	Params.authority_engine = AuthorityEngine;
 	Params.epoch_engine = EpochEngine;
 	Params.policy_engine = PolicyEngine;
@@ -258,7 +258,7 @@ bool ULaurnSubsystem::VerifyIncomingTransition(const TArray<uint8>& TransitionPa
 			ReplayRecorder,
 			RawPayload,
 			RawPayloadLen,
-			reinterpret_cast<const uint8_t(*)[32]>(OutputStateHash.GetData())
+			static_cast<const uint8_t(*)[32]>(static_cast<const void*>(OutputStateHash.GetData()))
 		);
 	}
 
@@ -285,7 +285,7 @@ bool ULaurnSubsystem::StartRecording()
 	}
 
 	LaurnResult Result = laurn_replay_recorder_create(
-		reinterpret_cast<const uint8_t(*)[32]>(InitialState.GetData()),
+		static_cast<const uint8_t(*)[32]>(static_cast<const void*>(InitialState.GetData())),
 		&ReplayRecorder
 	);
 

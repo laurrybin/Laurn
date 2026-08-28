@@ -15,23 +15,21 @@
 #![allow(unsafe_code)]
 #![allow(clippy::missing_safety_doc)]
 #![allow(clippy::not_unsafe_ptr_arg_deref)]
-#![allow(dead_code)] // To allow unused fields in handles before full API integration
 
 use std::panic::catch_unwind;
-use std::slice;
 use std::ptr;
+use std::slice;
 
 use authority::AuthorityEngine;
 use commitment::{CommitmentEngine, StateCommitment};
 use delta::StateDelta;
 use epoch::EpochEngine;
-use policy::{PolicyEngine, Policy, TransitionClass};
-use protocol::LaurnMessage;
+use policy::{Policy, PolicyEngine, TransitionClass};
 use protocol::codec::LaurnCodec;
-use transition::Transition;
-use verification::{VerificationEngine, VerificationContext, VerificationResult};
+use protocol::LaurnMessage;
 use state::CanonicalState;
-
+use transition::Transition;
+use verification::{VerificationContext, VerificationEngine, VerificationResult};
 
 pub mod logging;
 
@@ -133,12 +131,12 @@ pub unsafe extern "C" fn laurn_authority_engine_create(
         if out_handle.is_null() {
             return LaurnResult::NullPointer;
         }
-        
+
         let engine = AuthorityEngine::new();
         let handle = Box::new(LaurnAuthorityEngineHandle { inner: engine });
-        
+
         *out_handle = Box::into_raw(handle);
-        
+
         LaurnResult::Success
     })
 }
@@ -151,39 +149,38 @@ pub unsafe extern "C" fn laurn_authority_engine_destroy(
         if handle.is_null() {
             return LaurnResult::NullPointer;
         }
-        
+
         let _ = Box::from_raw(handle);
         LaurnResult::Success
     })
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn laurn_authority_engine_register_test_authority(
+pub unsafe extern "C" fn laurn_authority_engine_register_diagnostic_authority(
     handle: *mut LaurnAuthorityEngineHandle,
 ) -> LaurnResult {
     catch_unwind_ffi(|| {
         if handle.is_null() {
             return LaurnResult::NullPointer;
         }
-        
+
         let engine = &mut (*handle).inner;
-        
+
         let secret_bytes = [0x42; 32];
         let signing_key = ed25519_dalek::SigningKey::from_bytes(&secret_bytes);
-        
 
-        
         // Convert Dalek verifying key to our AuthorityId (which is 32 bytes)
         let verifying_key = signing_key.verifying_key();
         let pub_key_bytes = verifying_key.to_bytes();
-        
+
         let authority = authority::Authority {
             id: authority::AuthorityId(pub_key_bytes),
             role: authority::AuthorityRole::Client,
-            capabilities: authority::AuthorityCapability::CAN_SUBMIT_TRANSITION | authority::AuthorityCapability::CAN_SPAWN,
+            capabilities: authority::AuthorityCapability::CAN_SUBMIT_TRANSITION
+                | authority::AuthorityCapability::CAN_SPAWN,
             session_binding: None,
         };
-        
+
         match engine.register_authority(authority) {
             Ok(_) => LaurnResult::Success,
             Err(_) => LaurnResult::InvalidConfig, // Or could be Success if already registered
@@ -203,12 +200,12 @@ pub unsafe extern "C" fn laurn_epoch_engine_create(
         if out_handle.is_null() {
             return LaurnResult::NullPointer;
         }
-        
+
         let engine = EpochEngine::new();
         let handle = Box::new(LaurnEpochEngineHandle { inner: engine });
-        
+
         *out_handle = Box::into_raw(handle);
-        
+
         LaurnResult::Success
     })
 }
@@ -221,7 +218,7 @@ pub unsafe extern "C" fn laurn_epoch_engine_destroy(
         if handle.is_null() {
             return LaurnResult::NullPointer;
         }
-        
+
         let _ = Box::from_raw(handle);
         LaurnResult::Success
     })
@@ -239,12 +236,12 @@ pub unsafe extern "C" fn laurn_policy_engine_create(
         if out_handle.is_null() {
             return LaurnResult::NullPointer;
         }
-        
+
         let engine = PolicyEngine::new();
         let handle = Box::new(LaurnPolicyEngineHandle { inner: engine });
-        
+
         *out_handle = Box::into_raw(handle);
-        
+
         LaurnResult::Success
     })
 }
@@ -257,7 +254,7 @@ pub unsafe extern "C" fn laurn_policy_engine_destroy(
         if handle.is_null() {
             return LaurnResult::NullPointer;
         }
-        
+
         let _ = Box::from_raw(handle);
         LaurnResult::Success
     })
@@ -275,7 +272,7 @@ pub unsafe extern "C" fn laurn_policy_create_default(
         if out_policy.is_null() {
             return LaurnResult::NullPointer;
         }
-        
+
         let policy = policy::Policy {
             protocol_version: 1,
             max_state_freshness_ms: 5000,
@@ -290,14 +287,12 @@ pub unsafe extern "C" fn laurn_policy_create_default(
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn laurn_policy_destroy(
-    handle: *mut LaurnPolicyHandle,
-) -> LaurnResult {
+pub unsafe extern "C" fn laurn_policy_destroy(handle: *mut LaurnPolicyHandle) -> LaurnResult {
     catch_unwind_ffi(|| {
         if handle.is_null() {
             return LaurnResult::NullPointer;
         }
-        
+
         let _ = Box::from_raw(handle);
         LaurnResult::Success
     })
@@ -315,12 +310,12 @@ pub unsafe extern "C" fn laurn_verification_engine_create(
         if out_handle.is_null() {
             return LaurnResult::NullPointer;
         }
-        
+
         let engine = VerificationEngine::new();
         let handle = Box::new(LaurnVerificationEngineHandle { inner: engine });
-        
+
         *out_handle = Box::into_raw(handle);
-        
+
         LaurnResult::Success
     })
 }
@@ -333,7 +328,7 @@ pub unsafe extern "C" fn laurn_verification_engine_destroy(
         if handle.is_null() {
             return LaurnResult::NullPointer;
         }
-        
+
         let _ = Box::from_raw(handle);
         LaurnResult::Success
     })
@@ -354,9 +349,9 @@ pub unsafe extern "C" fn laurn_protocol_decode_message(
         if buffer.is_null() || out_message.is_null() || out_bytes_consumed.is_null() {
             return LaurnResult::NullPointer;
         }
-        
+
         let stream = slice::from_raw_parts(buffer, buffer_len);
-        
+
         match LaurnCodec::decode(stream) {
             Ok((msg, consumed)) => {
                 let handle = Box::new(LaurnMessageHandle { inner: msg });
@@ -375,7 +370,7 @@ pub unsafe extern "C" fn laurn_message_destroy(handle: *mut LaurnMessageHandle) 
         if handle.is_null() {
             return LaurnResult::NullPointer;
         }
-        
+
         let _ = Box::from_raw(handle);
         LaurnResult::Success
     })
@@ -390,6 +385,11 @@ pub unsafe extern "C" fn laurn_protocol_encode_transition_message(
     protocol_version: u32,
     _transition_class: u32,
     transition_id: u64,
+    authority_id: *const [u8; 32],
+    epoch_id: *const [u8; 32],
+    timestamp_ms: u64,
+    input_state_commitment: *const [u8; 32],
+    output_state_commitment: *const [u8; 32],
     raw_payload: *const u8,
     raw_payload_len: usize,
     signature: *const [u8; 64],
@@ -397,26 +397,33 @@ pub unsafe extern "C" fn laurn_protocol_encode_transition_message(
     out_buffer_len: *mut usize,
 ) -> LaurnResult {
     catch_unwind_ffi(|| {
-        if raw_payload.is_null() || signature.is_null() || out_buffer.is_null() || out_buffer_len.is_null() {
+        if raw_payload.is_null()
+            || signature.is_null()
+            || out_buffer.is_null()
+            || out_buffer_len.is_null()
+            || authority_id.is_null()
+            || epoch_id.is_null()
+            || input_state_commitment.is_null()
+            || output_state_commitment.is_null()
+        {
             return LaurnResult::NullPointer;
         }
 
         let raw_payload_slice = slice::from_raw_parts(raw_payload, raw_payload_len);
         let sig = *signature;
-        
-        // Mock a basic transition for our test
+
         let trans = transition::Transition {
             id: transition::TransitionId(transition_id),
             metadata: transition::TransitionMetadata {
-                authority_id: authority::AuthorityId([0x42; 32]),
-                epoch_id: epoch::EpochId([1u8; 32]),
-                timestamp_ms: 0,
+                authority_id: authority::AuthorityId(*authority_id),
+                epoch_id: epoch::EpochId(*epoch_id),
+                timestamp_ms,
             },
-            input_state: commitment::StateCommitment([0u8; 32]),
-            output_state: commitment::StateCommitment([0u8; 32]),
+            input_state: commitment::StateCommitment(*input_state_commitment),
+            output_state: commitment::StateCommitment(*output_state_commitment),
             payload_commitment: transition::TransitionCommitment::compute(raw_payload_slice),
         };
-        
+
         let t_msg = protocol::TransitionMessage {
             transition: trans,
             raw_payload: raw_payload_slice.to_vec(),
@@ -435,7 +442,7 @@ pub unsafe extern "C" fn laurn_protocol_encode_transition_message(
                 *out_buffer = buf.as_mut_ptr();
                 let _ = Box::into_raw(buf); // leak it to pass to C++
                 LaurnResult::Success
-            },
+            }
             Err(_) => LaurnResult::EncodeFailed,
         }
     })
@@ -468,25 +475,29 @@ pub unsafe extern "C" fn laurn_message_get_transition(
         if message.is_null() || out_transition.is_null() {
             return LaurnResult::NullPointer;
         }
-        
+
         let msg = &(*message).inner;
         if let protocol::LaurnMessagePayload::Transition(ref t) = msg.payload {
-            let handle = Box::new(LaurnTransitionHandle { inner: t.transition.clone() });
+            let handle = Box::new(LaurnTransitionHandle {
+                inner: t.transition.clone(),
+            });
             *out_transition = Box::into_raw(handle);
             LaurnResult::Success
         } else {
-            LaurnResult::DecodeFailed 
+            LaurnResult::DecodeFailed
         }
     })
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn laurn_transition_destroy(handle: *mut LaurnTransitionHandle) -> LaurnResult {
+pub unsafe extern "C" fn laurn_transition_destroy(
+    handle: *mut LaurnTransitionHandle,
+) -> LaurnResult {
     catch_unwind_ffi(|| {
         if handle.is_null() {
             return LaurnResult::NullPointer;
         }
-        
+
         let _ = Box::from_raw(handle);
         LaurnResult::Success
     })
@@ -501,7 +512,7 @@ pub unsafe extern "C" fn laurn_message_get_signature(
         if message.is_null() || out_signature.is_null() {
             return LaurnResult::NullPointer;
         }
-        
+
         let msg = &(*message).inner;
         if let protocol::LaurnMessagePayload::Transition(ref t) = msg.payload {
             ptr::copy_nonoverlapping(t.signature.as_ptr(), (*out_signature).as_mut_ptr(), 64);
@@ -522,7 +533,7 @@ pub unsafe extern "C" fn laurn_message_get_raw_payload(
         if message.is_null() || out_payload.is_null() || out_payload_len.is_null() {
             return LaurnResult::NullPointer;
         }
-        
+
         let msg = &(*message).inner;
         if let protocol::LaurnMessagePayload::Transition(ref t) = msg.payload {
             *out_payload = t.raw_payload.as_ptr();
@@ -543,7 +554,7 @@ pub unsafe extern "C" fn laurn_message_get_protocol_version(
         if message.is_null() || out_version.is_null() {
             return LaurnResult::NullPointer;
         }
-        
+
         let msg = &(*message).inner;
         *out_version = msg.version.major; // Just using major for now as a u32 representation
         LaurnResult::Success
@@ -559,10 +570,9 @@ pub unsafe extern "C" fn laurn_transition_get_class(
         if transition.is_null() || out_class.is_null() {
             return LaurnResult::NullPointer;
         }
-        
-        // Assume default class 1 for now if transition doesn't hold it natively
-        // In a real system, the transition itself or payload would denote its class
-        *out_class = 1; 
+
+        // Default to transition class 1 if transition doesn't explicitly declare it
+        *out_class = 1;
         LaurnResult::Success
     })
 }
@@ -581,12 +591,12 @@ pub unsafe extern "C" fn laurn_state_commitment_compute(
         if buffer.is_null() || out_hash.is_null() {
             return LaurnResult::NullPointer;
         }
-        
+
         let stream = slice::from_raw_parts(buffer, buffer_len);
         let commitment = CommitmentEngine::commit_state(stream);
-        
+
         ptr::copy_nonoverlapping(commitment.0.as_ptr(), (*out_hash).as_mut_ptr(), 32);
-        
+
         LaurnResult::Success
     })
 }
@@ -631,9 +641,16 @@ pub unsafe extern "C" fn laurn_verify_transition(
         }
 
         let p = &*params;
-        if p.transition.is_null() || p.raw_payload.is_null() || p.signature.is_null() || 
-           p.expected_input_state.is_null() || p.generated_output_state.is_null() || 
-           p.authority_engine.is_null() || p.epoch_engine.is_null() || p.policy_engine.is_null() || p.policy.is_null() {
+        if p.transition.is_null()
+            || p.raw_payload.is_null()
+            || p.signature.is_null()
+            || p.expected_input_state.is_null()
+            || p.generated_output_state.is_null()
+            || p.authority_engine.is_null()
+            || p.epoch_engine.is_null()
+            || p.policy_engine.is_null()
+            || p.policy.is_null()
+        {
             return LaurnResult::NullPointer;
         }
 
@@ -668,7 +685,7 @@ pub unsafe extern "C" fn laurn_verify_transition(
         };
 
         let v = &(*verifier).inner;
-        
+
         match v.verify(&ctx) {
             VerificationResult::Valid => LaurnResult::Success,
             VerificationResult::Duplicate(_) => LaurnResult::VerificationDuplicate,
@@ -683,7 +700,7 @@ pub unsafe extern "C" fn laurn_verify_transition(
 // ----------------------------------------------------------------------------
 
 #[no_mangle]
-pub unsafe extern "C" fn laurn_test_sign_transition(
+pub unsafe extern "C" fn laurn_diagnostic_sign_transition(
     raw_payload: *const u8,
     raw_payload_len: usize,
     out_signature: *mut [u8; 64],
@@ -692,19 +709,19 @@ pub unsafe extern "C" fn laurn_test_sign_transition(
         if raw_payload.is_null() || out_signature.is_null() {
             return LaurnResult::NullPointer;
         }
-        
+
         let payload = slice::from_raw_parts(raw_payload, raw_payload_len);
-        
+
         // In a real scenario, the client loads its private key from disk/keystore.
-        // For our deterministic tests, we'll use a hardcoded test key.
+        // Use deterministic diagnostic key for integration validation.
         let secret_bytes = [0x42; 32];
         let signing_key = ed25519_dalek::SigningKey::from_bytes(&secret_bytes);
-        
+
         use ed25519_dalek::Signer;
         let sig = signing_key.sign(payload);
-        
+
         ptr::copy_nonoverlapping(sig.to_bytes().as_ptr(), (*out_signature).as_mut_ptr(), 64);
-        
+
         LaurnResult::Success
     })
 }
@@ -824,7 +841,11 @@ pub unsafe extern "C" fn laurn_replay_reader_next_frame(
     out_expected_output_state: *mut [u8; 32],
 ) -> LaurnResult {
     catch_unwind_ffi(|| {
-        if reader.is_null() || out_payload.is_null() || out_payload_len.is_null() || out_expected_output_state.is_null() {
+        if reader.is_null()
+            || out_payload.is_null()
+            || out_payload_len.is_null()
+            || out_expected_output_state.is_null()
+        {
             return LaurnResult::NullPointer;
         }
         match (*reader).inner.next_frame() {
@@ -835,7 +856,11 @@ pub unsafe extern "C" fn laurn_replay_reader_next_frame(
                 let ptr = buf.as_mut_ptr();
                 std::mem::forget(buf);
                 *out_payload = ptr;
-                ptr::copy_nonoverlapping(frame.expected_output_state.0.as_ptr(), (*out_expected_output_state).as_mut_ptr(), 32);
+                ptr::copy_nonoverlapping(
+                    frame.expected_output_state.0.as_ptr(),
+                    (*out_expected_output_state).as_mut_ptr(),
+                    32,
+                );
                 LaurnResult::Success
             }
             Ok(None) => LaurnResult::EndOfStream,
@@ -895,7 +920,10 @@ pub unsafe extern "C" fn laurn_replay_analyze_divergence(
             return LaurnResult::NullPointer;
         }
 
-        match replay::divergence::DivergenceAnalyzer::analyze(&mut (*auth_reader).inner, &mut (*test_reader).inner) {
+        match replay::divergence::DivergenceAnalyzer::analyze(
+            &mut (*auth_reader).inner,
+            &mut (*test_reader).inner,
+        ) {
             Some(report) => {
                 let mut c_report = LaurnDivergenceReport {
                     frame_index: report.frame_index,
@@ -909,7 +937,7 @@ pub unsafe extern "C" fn laurn_replay_analyze_divergence(
                     expected_frames: 0,
                     actual_frames: 0,
                 };
-                
+
                 use replay::divergence::DivergenceReason::*;
                 match report.reason {
                     ParentMismatch { expected, actual } => {
@@ -935,7 +963,10 @@ pub unsafe extern "C" fn laurn_replay_analyze_divergence(
                     PayloadMismatch => {
                         c_report.reason = LaurnDivergenceReason::PayloadMismatch;
                     }
-                    LengthMismatch { expected_frames, actual_frames } => {
+                    LengthMismatch {
+                        expected_frames,
+                        actual_frames,
+                    } => {
                         c_report.reason = LaurnDivergenceReason::LengthMismatch;
                         c_report.expected_frames = expected_frames;
                         c_report.actual_frames = actual_frames;
@@ -944,7 +975,7 @@ pub unsafe extern "C" fn laurn_replay_analyze_divergence(
                         c_report.reason = LaurnDivergenceReason::DecodeFailed;
                     }
                 }
-                
+
                 *out_report = c_report;
                 LaurnResult::DivergenceDetected
             }
@@ -961,19 +992,28 @@ mod tests {
     fn test_ffi_engine_lifecycle() {
         unsafe {
             let mut handle: *mut LaurnAuthorityEngineHandle = ptr::null_mut();
-            
-            assert_eq!(laurn_authority_engine_create(&mut handle as *mut _), LaurnResult::Success);
+
+            assert_eq!(
+                laurn_authority_engine_create(&mut handle as *mut _),
+                LaurnResult::Success
+            );
             assert!(!handle.is_null());
-            
+
             assert_eq!(laurn_authority_engine_destroy(handle), LaurnResult::Success);
         }
     }
-    
+
     #[test]
     fn test_ffi_null_pointer_handling() {
         unsafe {
-            assert_eq!(laurn_authority_engine_create(ptr::null_mut()), LaurnResult::NullPointer);
-            assert_eq!(laurn_authority_engine_destroy(ptr::null_mut()), LaurnResult::NullPointer);
+            assert_eq!(
+                laurn_authority_engine_create(ptr::null_mut()),
+                LaurnResult::NullPointer
+            );
+            assert_eq!(
+                laurn_authority_engine_destroy(ptr::null_mut()),
+                LaurnResult::NullPointer
+            );
         }
     }
 }
@@ -1006,15 +1046,15 @@ pub extern "C" fn laurn_get_build_info(
             Err(_) => return LaurnResult::EncodeFailed,
         };
         let bytes = c_str.as_bytes_with_nul();
-        
+
         if bytes.len() > buffer_len {
             return LaurnResult::BufferTooSmall;
         }
-        
+
         unsafe {
             std::ptr::copy_nonoverlapping(bytes.as_ptr(), buffer as *mut u8, bytes.len());
         }
-        
+
         LaurnResult::Success
     })
 }

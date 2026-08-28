@@ -12,6 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-fn main() {
-    println!("Hello, world!");
+#include "ExampleGameMode.h"
+#include "ExampleCharacter.h"
+#include "ExamplePlayerController.h"
+#include "ExampleHUD.h"
+#include "ExampleGameState.h"
+
+AExampleGameMode::AExampleGameMode()
+{
+    DefaultPawnClass = AExampleCharacter::StaticClass();
+    PlayerControllerClass = AExamplePlayerController::StaticClass();
+    HUDClass = AExampleHUD::StaticClass();
+    GameStateClass = AExampleGameState::StaticClass();
 }
