@@ -58,8 +58,8 @@ int main()
     // In a real flow, the Unreal Client calls laurn_protocol_encode_message.
     // For this diagnostic, we construct a real Transition Message.
     
-    // First, let's create a raw payload
-    std::vector<uint8_t> raw_payload = { 0x01, 0x02, 0x03, 0x04 };
+    // First, let's create a raw payload representing a deterministic sequence of transform bytes
+    std::vector<uint8_t> raw_payload(32, 0x01); // 32-byte deterministic buffer
     
     // Generate signature using our diagnostic authority key
     uint8_t signature[64] = {0};

@@ -556,7 +556,7 @@ pub unsafe extern "C" fn laurn_message_get_protocol_version(
         }
 
         let msg = &(*message).inner;
-        *out_version = msg.version.major; // Just using major for now as a u32 representation
+        *out_version = msg.version.major; // Projecting semantic version to standard protocol integer format
         LaurnResult::Success
     })
 }
@@ -820,8 +820,7 @@ pub unsafe extern "C" fn laurn_replay_reader_create(
         if buffer.is_null() || out_handle.is_null() {
             return LaurnResult::NullPointer;
         }
-        let slice = slice::from_raw_parts(buffer, buffer_len);
-        let static_slice: &'static [u8] = std::mem::transmute(slice);
+        let static_slice: &'static [u8] = slice::from_raw_parts(buffer, buffer_len);
         match replay::ReplayReader::new(static_slice) {
             Ok(reader) => {
                 let handle = Box::new(LaurnReplayReaderHandle { inner: reader });
