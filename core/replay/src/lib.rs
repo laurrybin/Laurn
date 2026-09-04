@@ -67,6 +67,10 @@ impl ReplayRecorder {
     }
 
     /// Serializes the entire session to a byte vector.
+    ///
+    /// # Errors
+    ///
+    /// Returns an I/O error if Borsh serialization fails.
     pub fn serialize(&self) -> Result<Vec<u8>, std::io::Error> {
         let mut buffer = Vec::new();
         self.header.serialize(&mut buffer)?;
@@ -84,6 +88,12 @@ pub struct ReplayReader<'a> {
 }
 
 impl<'a> ReplayReader<'a> {
+    /// Creates a reader over a serialized replay buffer.
+    ///
+    /// # Errors
+    ///
+    /// Returns an I/O error when the replay header or frame count cannot be
+    /// decoded, or when the replay magic bytes are invalid.
     pub fn new(buffer: &'a [u8]) -> Result<Self, std::io::Error> {
         let mut buf = buffer;
         let header = ReplayHeader::deserialize(&mut buf)?;
@@ -104,6 +114,10 @@ impl<'a> ReplayReader<'a> {
     }
 
     /// Reads the next frame from the stream.
+    ///
+    /// # Errors
+    ///
+    /// Returns an I/O error if the next replay frame cannot be decoded.
     pub fn next_frame(&mut self) -> Result<Option<ReplayFrame>, std::io::Error> {
         if self.current_frame >= self.total_frames {
             return Ok(None);
@@ -121,13 +135,13 @@ mod tests {
     #[test]
     fn test_replay_recorder_and_reader() -> Result<(), Box<dyn std::error::Error>> {
         let initial_state = StateCommitment([0; 32]); // Just zeroes
-        let mut recorder = ReplayRecorder::new(initial_state.clone());
+        let mut recorder = ReplayRecorder::new(initial_state);
 
         let raw_payload = vec![1, 2, 3, 4];
         let mut output_state = StateCommitment([0; 32]);
         output_state.0[0] = 99; // some synthetic state
 
-        recorder.add_frame(raw_payload.clone(), output_state.clone());
+        recorder.add_frame(raw_payload.clone(), output_state);
 
         // Serialize
         let serialized = recorder.serialize()?;

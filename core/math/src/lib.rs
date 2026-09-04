@@ -183,12 +183,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_canonical_f32_rejects_nan() -> Result<(), Box<dyn std::error::Error>> {
+    fn test_canonical_f32_rejects_nan() {
         assert!(CanonicalF32::new(f32::NAN).is_err());
         assert!(CanonicalF32::new(f32::INFINITY).is_err());
         assert!(CanonicalF32::new(f32::NEG_INFINITY).is_err());
         assert!(CanonicalF32::new(1.0).is_ok());
-        Ok(())
     }
 
     #[test]

@@ -174,7 +174,7 @@ mod tests {
     }
 
     #[test]
-    fn test_policy_acceptance() -> Result<(), Box<dyn std::error::Error>> {
+    fn test_policy_acceptance() {
         let engine = PolicyEngine::new();
         let policy = default_policy();
         let metadata = generate_test_metadata(1000);
@@ -191,11 +191,10 @@ mod tests {
         let decision = engine.evaluate(&policy, &ctx);
 
         assert_eq!(decision, PolicyDecision::Accepted);
-        Ok(())
     }
 
     #[test]
-    fn test_policy_version_mismatch() -> Result<(), Box<dyn std::error::Error>> {
+    fn test_policy_version_mismatch() {
         let engine = PolicyEngine::new();
         let policy = default_policy();
         let metadata = generate_test_metadata(1000);
@@ -214,11 +213,10 @@ mod tests {
             decision,
             PolicyDecision::Rejected(PolicyRejectionReason::ProtocolVersionMismatch)
         );
-        Ok(())
     }
 
     #[test]
-    fn test_policy_evidence_missing() -> Result<(), Box<dyn std::error::Error>> {
+    fn test_policy_evidence_missing() {
         let engine = PolicyEngine::new();
         let policy = default_policy();
         let metadata = generate_test_metadata(1000);
@@ -237,11 +235,10 @@ mod tests {
             decision,
             PolicyDecision::Rejected(PolicyRejectionReason::EvidenceMissing)
         );
-        Ok(())
     }
 
     #[test]
-    fn test_policy_state_freshness_violation() -> Result<(), Box<dyn std::error::Error>> {
+    fn test_policy_state_freshness_violation() {
         let engine = PolicyEngine::new();
         let policy = default_policy();
 
@@ -276,11 +273,10 @@ mod tests {
             decision2,
             PolicyDecision::Rejected(PolicyRejectionReason::StateFreshnessViolation)
         );
-        Ok(())
     }
 
     #[test]
-    fn test_policy_transition_class_not_allowed() -> Result<(), Box<dyn std::error::Error>> {
+    fn test_policy_transition_class_not_allowed() {
         let engine = PolicyEngine::new();
         let policy = default_policy(); // Only INPUT and SPAWN allowed
         let metadata = generate_test_metadata(1000);
@@ -300,11 +296,10 @@ mod tests {
             decision,
             PolicyDecision::Rejected(PolicyRejectionReason::TransitionClassNotAllowed)
         );
-        Ok(())
     }
 
     #[test]
-    fn test_policy_insufficient_authority_capability() -> Result<(), Box<dyn std::error::Error>> {
+    fn test_policy_insufficient_authority_capability() {
         let engine = PolicyEngine::new();
         let policy = default_policy(); // Requires CAN_SUBMIT_TRANSITION
         let metadata = generate_test_metadata(1000);
@@ -323,6 +318,5 @@ mod tests {
             decision,
             PolicyDecision::Rejected(PolicyRejectionReason::InsufficientAuthorityCapability)
         );
-        Ok(())
     }
 }

@@ -17,7 +17,7 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use delta::{CollectionChangeType, DeltaApplicable, DeltaError, DeltaOp, StateDelta};
 use std::collections::{HashMap, HashSet};
 
-/// A production-grade Key-Value Entity State implementation of DeltaApplicable.
+/// Deterministic key-value entity state implementation of `DeltaApplicable`.
 /// It tracks entities, components, fields, and collections.
 #[derive(Debug, Default, Clone, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
 pub struct KeyValueDomainState {
@@ -111,7 +111,7 @@ impl DeltaApplicable for KeyValueDomainState {
                     data,
                 } => {
                     let key = (*entity_id, *component_id, *collection_id);
-                    let collection = self.collections.entry(key).or_insert_with(Vec::new);
+                    let collection = self.collections.entry(key).or_default();
 
                     match change_type {
                         CollectionChangeType::Insert => {
@@ -124,7 +124,7 @@ impl DeltaApplicable for KeyValueDomainState {
                         }
                         CollectionChangeType::Update => {
                             if let Some(pos) = collection.iter().position(|x| x == data) {
-                                collection[pos] = data.clone();
+                                collection[pos].clone_from(data);
                             }
                         }
                         CollectionChangeType::Clear => {
@@ -144,11 +144,10 @@ impl DeterministicStateDomain for KeyValueDomainState {
         let mut sorted_entities: Vec<u64> = self.entities.iter().copied().collect();
         sorted_entities.sort_unstable();
 
-        let mut sorted_fields: Vec<(&(u64, u32, u32), &Vec<u8>)> = self.fields.iter().collect();
+        let mut sorted_fields: Vec<_> = self.fields.iter().collect();
         sorted_fields.sort_by_key(|&(k, _)| k);
 
-        let mut sorted_collections: Vec<(&(u64, u32, u32), &Vec<Vec<u8>>)> =
-            self.collections.iter().collect();
+        let mut sorted_collections: Vec<_> = self.collections.iter().collect();
         sorted_collections.sort_by_key(|&(k, _)| k);
 
         let mut buffer = Vec::new();

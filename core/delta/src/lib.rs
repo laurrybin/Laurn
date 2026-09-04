@@ -52,7 +52,7 @@ pub enum DeltaOp {
     },
 }
 
-/// Maximum allowed semantic delta operations per transition to prevent algorithmic complexity DoS.
+/// Maximum allowed semantic delta operations per transition to prevent algorithmic complexity `DoS`.
 pub const MAX_DELTA_OPS: usize = 100_000;
 
 /// A structured collection of semantic delta operations that together form a state transition.

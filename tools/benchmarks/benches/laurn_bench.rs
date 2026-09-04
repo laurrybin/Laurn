@@ -59,15 +59,15 @@ fn generate_benchmark_transition(signing_key: &SigningKey) -> LaurnMessage {
 
 fn bench_commitment_latency(c: &mut Criterion) {
     let mut payload = vec![0u8; 1024]; // 1 KB state chunk
-    for i in 0..payload.len() {
-        payload[i] = (i % 256) as u8;
+    for (byte, value) in payload.iter_mut().zip((0u8..=u8::MAX).cycle()) {
+        *byte = value;
     }
 
     c.bench_function("Commitment Latency (1KB State Chunk)", |b| {
         b.iter(|| {
             let result = CommitmentEngine::compute(TRANSITION_DOMAIN_V1, black_box(&payload));
             black_box(result)
-        })
+        });
     });
 }
 
@@ -79,7 +79,7 @@ fn bench_transition_latency(c: &mut Criterion) {
         b.iter(|| {
             let msg = generate_benchmark_transition(black_box(&signing_key));
             black_box(msg)
-        })
+        });
     });
 }
 
@@ -92,7 +92,7 @@ fn bench_encoding_latency(c: &mut Criterion) {
         b.iter(|| {
             let encoded = borsh::to_vec(&msg).unwrap_or_else(|_| vec![]);
             black_box(encoded)
-        })
+        });
     });
 
     let encoded = borsh::to_vec(&msg).unwrap_or_else(|_| vec![]);
@@ -103,7 +103,7 @@ fn bench_encoding_latency(c: &mut Criterion) {
                 Err(_) => return,
             };
             black_box(decoded);
-        })
+        });
     });
 }
 
@@ -173,7 +173,7 @@ fn bench_verification_latency(c: &mut Criterion) {
             let result = verifier.verify(black_box(&ctx));
             assert_eq!(result, verification::VerificationResult::Valid);
             black_box(result)
-        })
+        });
     });
 }
 

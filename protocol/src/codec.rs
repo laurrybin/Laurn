@@ -174,7 +174,7 @@ mod tests {
     }
 
     #[test]
-    fn test_oversized_message_rejection() -> Result<(), Box<dyn std::error::Error>> {
+    fn test_oversized_message_rejection() {
         // Create a header claiming to be 20 MB, which is > MAX_MESSAGE_SIZE
         let massive_len = 20 * 1024 * 1024_u32;
         let mut frame = Vec::new();
@@ -186,7 +186,6 @@ mod tests {
         // It should reject immediately without trying to read 20 MB or wait for it
         let result = LaurnCodec::decode(&frame);
         assert_eq!(result, Err(CodecError::MessageTooLarge(massive_len)));
-        Ok(())
     }
 
     #[test]

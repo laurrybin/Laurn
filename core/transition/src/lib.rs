@@ -132,7 +132,7 @@ mod tests {
         let metadata = TransitionMetadata {
             authority_id: AuthorityId([0u8; 32]),
             epoch_id: EpochId([1u8; 32]),
-            timestamp_ms: 1622548800000,
+            timestamp_ms: 1_622_548_800_000,
         };
 
         let transition = Transition {

@@ -28,7 +28,7 @@ pub enum StateSerializationError {
 impl std::fmt::Display for StateSerializationError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::SerializationFailed(msg) => write!(f, "State serialization failed: {}", msg),
+            Self::SerializationFailed(msg) => write!(f, "State serialization failed: {msg}"),
         }
     }
 }
@@ -67,6 +67,10 @@ pub struct CanonicalState {
 pub trait DeterministicStateDomain {
     /// Returns the canonical, deterministically serialized bytes of the domain.
     /// This removes any platform-specific padding or compiler layout artifacts.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StateSerializationError`] when canonical serialization fails.
     fn canonicalize(&self) -> Result<Vec<u8>, StateSerializationError>;
 }
 

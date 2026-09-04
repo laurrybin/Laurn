@@ -54,6 +54,75 @@ pub struct DivergenceReport {
 pub struct DivergenceAnalyzer;
 
 impl DivergenceAnalyzer {
+    fn compare_payloads(
+        frame_index: u32,
+        auth_payload: &[u8],
+        test_payload: &[u8],
+    ) -> DivergenceReport {
+        let Ok(auth_msg) = LaurnMessage::try_from_slice(auth_payload) else {
+            return DivergenceReport {
+                frame_index,
+                reason: DivergenceReason::DecodeFailed,
+            };
+        };
+
+        let Ok(test_msg) = LaurnMessage::try_from_slice(test_payload) else {
+            return DivergenceReport {
+                frame_index,
+                reason: DivergenceReason::DecodeFailed,
+            };
+        };
+
+        let protocol::LaurnMessagePayload::Transition(auth_t) = auth_msg.payload else {
+            return DivergenceReport {
+                frame_index,
+                reason: DivergenceReason::PayloadMismatch,
+            };
+        };
+
+        let protocol::LaurnMessagePayload::Transition(test_t) = test_msg.payload else {
+            return DivergenceReport {
+                frame_index,
+                reason: DivergenceReason::PayloadMismatch,
+            };
+        };
+
+        if auth_t.transition.metadata.epoch_id != test_t.transition.metadata.epoch_id {
+            return DivergenceReport {
+                frame_index,
+                reason: DivergenceReason::EpochMismatch {
+                    expected: auth_t.transition.metadata.epoch_id,
+                    actual: test_t.transition.metadata.epoch_id,
+                },
+            };
+        }
+
+        if auth_t.transition.metadata.authority_id != test_t.transition.metadata.authority_id {
+            return DivergenceReport {
+                frame_index,
+                reason: DivergenceReason::AuthorityMismatch {
+                    expected: auth_t.transition.metadata.authority_id,
+                    actual: test_t.transition.metadata.authority_id,
+                },
+            };
+        }
+
+        if auth_t.transition.input_state != test_t.transition.input_state {
+            return DivergenceReport {
+                frame_index,
+                reason: DivergenceReason::ParentMismatch {
+                    expected: auth_t.transition.input_state,
+                    actual: test_t.transition.input_state,
+                },
+            };
+        }
+
+        DivergenceReport {
+            frame_index,
+            reason: DivergenceReason::PayloadMismatch,
+        }
+    }
+
     pub fn analyze(
         auth_reader: &mut ReplayReader,
         test_reader: &mut ReplayReader,
@@ -104,84 +173,15 @@ impl DivergenceAnalyzer {
                 }
             };
 
-            // 1. Check raw payloads. If they differ, we decode them to find the semantic mismatch.
             if auth_frame.raw_payload != test_frame.raw_payload {
-                // Decode both
-                let auth_msg = match LaurnMessage::try_from_slice(&auth_frame.raw_payload) {
-                    Ok(m) => m,
-                    Err(_) => {
-                        return Some(DivergenceReport {
-                            frame_index,
-                            reason: DivergenceReason::DecodeFailed,
-                        })
-                    }
-                };
-                let test_msg = match LaurnMessage::try_from_slice(&test_frame.raw_payload) {
-                    Ok(m) => m,
-                    Err(_) => {
-                        return Some(DivergenceReport {
-                            frame_index,
-                            reason: DivergenceReason::DecodeFailed,
-                        })
-                    }
-                };
-
-                let protocol::LaurnMessagePayload::Transition(auth_t) = auth_msg.payload else {
-                    return Some(DivergenceReport {
-                        frame_index,
-                        reason: DivergenceReason::PayloadMismatch,
-                    });
-                };
-                let protocol::LaurnMessagePayload::Transition(test_t) = test_msg.payload else {
-                    return Some(DivergenceReport {
-                        frame_index,
-                        reason: DivergenceReason::PayloadMismatch,
-                    });
-                };
-
-                // Compare epochs
-                if auth_t.transition.metadata.epoch_id != test_t.transition.metadata.epoch_id {
-                    return Some(DivergenceReport {
-                        frame_index,
-                        reason: DivergenceReason::EpochMismatch {
-                            expected: auth_t.transition.metadata.epoch_id,
-                            actual: test_t.transition.metadata.epoch_id,
-                        },
-                    });
-                }
-
-                // Compare authorities
-                if auth_t.transition.metadata.authority_id
-                    != test_t.transition.metadata.authority_id
-                {
-                    return Some(DivergenceReport {
-                        frame_index,
-                        reason: DivergenceReason::AuthorityMismatch {
-                            expected: auth_t.transition.metadata.authority_id,
-                            actual: test_t.transition.metadata.authority_id,
-                        },
-                    });
-                }
-
-                // Compare input state (ParentMismatch)
-                if auth_t.transition.input_state != test_t.transition.input_state {
-                    return Some(DivergenceReport {
-                        frame_index,
-                        reason: DivergenceReason::ParentMismatch {
-                            expected: auth_t.transition.input_state,
-                            actual: test_t.transition.input_state,
-                        },
-                    });
-                }
-
-                // Otherwise general PayloadMismatch (e.g. inner game-specific payload differs)
-                return Some(DivergenceReport {
+                return Some(Self::compare_payloads(
                     frame_index,
-                    reason: DivergenceReason::PayloadMismatch,
-                });
+                    &auth_frame.raw_payload,
+                    &test_frame.raw_payload,
+                ));
             }
 
-            // 2. Payloads match exactly, now check output states
+            // Payloads match exactly, now check output states.
             if auth_frame.expected_output_state != test_frame.expected_output_state {
                 return Some(DivergenceReport {
                     frame_index,

@@ -34,7 +34,7 @@ impl std::fmt::Display for PlatformIntegrityError {
             Self::UnsupportedPlatform => {
                 write!(f, "Platform integration is unavailable on this hardware")
             }
-            Self::HardwareApiError(msg) => write!(f, "Hardware API error: {}", msg),
+            Self::HardwareApiError(msg) => write!(f, "Hardware API error: {msg}"),
             Self::KeyMaterialUnavailable => write!(f, "Platform key material is unavailable"),
         }
     }

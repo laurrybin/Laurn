@@ -118,7 +118,7 @@ mod tests {
             evidence_type: EvidenceType::ServerAuthoritative,
             issuer,
             epoch_id: EpochId([10u8; 32]),
-            timestamp_ms: 1234567890,
+            timestamp_ms: 1_234_567_890,
             transition_commitment: TransitionCommitment([2u8; 32]),
             raw_attestation: vec![0xca, 0xfe, 0xba, 0xbe],
             signature: [0u8; 64],
@@ -144,7 +144,7 @@ mod tests {
             evidence_type: EvidenceType::IntelSgx,
             issuer,
             epoch_id: EpochId([10u8; 32]),
-            timestamp_ms: 1234567890,
+            timestamp_ms: 1_234_567_890,
             transition_commitment: TransitionCommitment([2u8; 32]),
             raw_attestation: vec![0xca, 0xfe, 0xba, 0xbe],
             signature: [0u8; 64],
@@ -155,7 +155,7 @@ mod tests {
         evidence.signature = signature.to_bytes();
 
         // Alter timestamp
-        evidence.timestamp_ms = 1234567891;
+        evidence.timestamp_ms = 1_234_567_891;
         assert!(!evidence.verify_signature(&verifying_key));
     }
 }
