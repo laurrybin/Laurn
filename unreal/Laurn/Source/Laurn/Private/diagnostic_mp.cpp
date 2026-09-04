@@ -58,30 +58,53 @@ int main()
     // In a real flow, the Unreal Client calls laurn_protocol_encode_message.
     // For this diagnostic, we construct a real Transition Message.
     
-    // First, let's create a raw payload representing a deterministic sequence of transform bytes
-    std::vector<uint8_t> raw_payload(32, 0x01); // 32-byte deterministic buffer
-    
-    // Generate signature using our diagnostic authority key
-    uint8_t signature[64] = {0};
-    if (laurn_diagnostic_sign_transition(raw_payload.data(), raw_payload.size(), &signature) != LAURN_SUCCESS) {
-        std::cerr << "Failed to sign payload.\n";
-        return 1;
-    }
-    
-    // Encode the entire LaurnMessage (version + transition + raw_payload + signature)
-    uint8_t* encoded_bytes = nullptr;
-    size_t encoded_size = 0;
-    
-    uint8_t authority_id[32] = {0x42};
+    std::vector<uint8_t> raw_payload(32, 0x01);
+
+    uint64_t transition_id = 1;
+    uint8_t authority_id[32] = {0};
     uint8_t epoch_id[32] = {0x01};
     uint64_t timestamp_ms = 1000;
     uint8_t input_state[32] = {0};
     uint8_t output_state[32] = {0};
 
+    if (laurn_epoch_engine_register(
+            epoch_engine,
+            &epoch_id,
+            1,
+            0,
+            2000,
+            &input_state) != LAURN_SUCCESS) {
+        std::cerr << "Failed to register diagnostic epoch.\n";
+        return 1;
+    }
+
+    if (laurn_epoch_engine_activate(epoch_engine, &epoch_id) != LAURN_SUCCESS) {
+        std::cerr << "Failed to activate diagnostic epoch.\n";
+        return 1;
+    }
+
+    uint8_t signature[64] = {0};
+    if (laurn_diagnostic_sign_transition(
+            transition_id,
+            &epoch_id,
+            timestamp_ms,
+            &input_state,
+            &output_state,
+            raw_payload.data(),
+            raw_payload.size(),
+            &authority_id,
+            &signature) != LAURN_SUCCESS) {
+        std::cerr << "Failed to sign transition.\n";
+        return 1;
+    }
+
+    uint8_t* encoded_bytes = nullptr;
+    size_t encoded_size = 0;
+
     if (laurn_protocol_encode_transition_message(
             1, // protocol version
             1, // transition class
-            1, // id
+            transition_id, // id
             &authority_id,
             &epoch_id,
             timestamp_ms,
@@ -155,7 +178,7 @@ int main()
     if (verify_res == LAURN_SUCCESS) {
         std::cout << "SUCCESS: Transition verified successfully!\n";
     } else {
-        std::cout << "WARNING: Transition verification returned code " << verify_res << ". (Expected if signature mismatch occurs during diagnostic FFI validation)\n";
+        std::cout << "ERROR: Transition verification returned code " << verify_res << ".\n";
     }
     
     // Cleanup

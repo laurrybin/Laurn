@@ -23,6 +23,7 @@ use std::slice;
 use authority::AuthorityEngine;
 use commitment::{CommitmentEngine, StateCommitment};
 use delta::StateDelta;
+use ed25519_dalek::Signer;
 use epoch::{Epoch, EpochEngine, EpochId, EpochStatus};
 use policy::{Policy, PolicyEngine, TransitionClass};
 use protocol::codec::LaurnCodec;
@@ -110,6 +111,10 @@ pub struct LaurnPolicyHandle {
 // Error Handling Helper
 // ----------------------------------------------------------------------------
 
+fn diagnostic_signing_key() -> ed25519_dalek::SigningKey {
+    ed25519_dalek::SigningKey::from_bytes(&[0x42; 32])
+}
+
 fn catch_unwind_ffi<F>(f: F) -> LaurnResult
 where
     F: FnOnce() -> LaurnResult + std::panic::UnwindSafe,
@@ -167,8 +172,7 @@ pub unsafe extern "C" fn laurn_authority_engine_register_diagnostic_authority(
 
         let engine = &mut (*handle).inner;
 
-        let secret_bytes = [0x42; 32];
-        let signing_key = ed25519_dalek::SigningKey::from_bytes(&secret_bytes);
+        let signing_key = diagnostic_signing_key();
 
         // Convert Dalek verifying key to our AuthorityId (which is 32 bytes)
         let verifying_key = signing_key.verifying_key();
@@ -449,6 +453,28 @@ pub unsafe extern "C" fn laurn_message_destroy(handle: *mut LaurnMessageHandle) 
 // Protocol Encoding
 // ----------------------------------------------------------------------------
 
+fn build_transition(
+    transition_id: u64,
+    authority_id: [u8; 32],
+    epoch_id: [u8; 32],
+    timestamp_ms: u64,
+    input_state_commitment: [u8; 32],
+    output_state_commitment: [u8; 32],
+    raw_payload: &[u8],
+) -> Transition {
+    Transition {
+        id: transition::TransitionId(transition_id),
+        metadata: transition::TransitionMetadata {
+            authority_id: authority::AuthorityId(authority_id),
+            epoch_id: epoch::EpochId(epoch_id),
+            timestamp_ms,
+        },
+        input_state: commitment::StateCommitment(input_state_commitment),
+        output_state: commitment::StateCommitment(output_state_commitment),
+        payload_commitment: transition::TransitionCommitment::compute(raw_payload),
+    }
+}
+
 #[no_mangle]
 pub unsafe extern "C" fn laurn_protocol_encode_transition_message(
     protocol_version: u32,
@@ -481,17 +507,15 @@ pub unsafe extern "C" fn laurn_protocol_encode_transition_message(
         let raw_payload_slice = slice::from_raw_parts(raw_payload, raw_payload_len);
         let sig = *signature;
 
-        let trans = transition::Transition {
-            id: transition::TransitionId(transition_id),
-            metadata: transition::TransitionMetadata {
-                authority_id: authority::AuthorityId(*authority_id),
-                epoch_id: epoch::EpochId(*epoch_id),
-                timestamp_ms,
-            },
-            input_state: commitment::StateCommitment(*input_state_commitment),
-            output_state: commitment::StateCommitment(*output_state_commitment),
-            payload_commitment: transition::TransitionCommitment::compute(raw_payload_slice),
-        };
+        let trans = build_transition(
+            transition_id,
+            *authority_id,
+            *epoch_id,
+            timestamp_ms,
+            *input_state_commitment,
+            *output_state_commitment,
+            raw_payload_slice,
+        );
 
         let t_msg = protocol::TransitionMessage {
             transition: trans,
@@ -778,26 +802,53 @@ pub unsafe extern "C" fn laurn_verify_transition(
 
 #[no_mangle]
 pub unsafe extern "C" fn laurn_diagnostic_sign_transition(
+    transition_id: u64,
+    epoch_id: *const [u8; 32],
+    timestamp_ms: u64,
+    input_state_commitment: *const [u8; 32],
+    output_state_commitment: *const [u8; 32],
     raw_payload: *const u8,
     raw_payload_len: usize,
+    out_authority_id: *mut [u8; 32],
     out_signature: *mut [u8; 64],
 ) -> LaurnResult {
     catch_unwind_ffi(|| {
-        if raw_payload.is_null() || out_signature.is_null() {
+        if epoch_id.is_null()
+            || input_state_commitment.is_null()
+            || output_state_commitment.is_null()
+            || raw_payload.is_null()
+            || out_authority_id.is_null()
+            || out_signature.is_null()
+        {
             return LaurnResult::NullPointer;
         }
 
         let payload = slice::from_raw_parts(raw_payload, raw_payload_len);
+        let signing_key = diagnostic_signing_key();
+        let authority_id = signing_key.verifying_key().to_bytes();
 
-        // In a real scenario, the client loads its private key from disk/keystore.
-        // Use deterministic diagnostic key for integration validation.
-        let secret_bytes = [0x42; 32];
-        let signing_key = ed25519_dalek::SigningKey::from_bytes(&secret_bytes);
+        let transition = build_transition(
+            transition_id,
+            authority_id,
+            *epoch_id,
+            timestamp_ms,
+            *input_state_commitment,
+            *output_state_commitment,
+            payload,
+        );
 
-        use ed25519_dalek::Signer;
-        let sig = signing_key.sign(payload);
+        let Ok(serialized_transition) = borsh::to_vec(&transition) else {
+            return LaurnResult::EncodeFailed;
+        };
 
-        ptr::copy_nonoverlapping(sig.to_bytes().as_ptr(), (*out_signature).as_mut_ptr(), 64);
+        let signature = signing_key.sign(&serialized_transition);
+
+        *out_authority_id = authority_id;
+        ptr::copy_nonoverlapping(
+            signature.to_bytes().as_ptr(),
+            (*out_signature).as_mut_ptr(),
+            64,
+        );
 
         LaurnResult::Success
     })
@@ -1128,6 +1179,139 @@ mod tests {
             );
 
             assert_eq!(laurn_epoch_engine_destroy(handle), LaurnResult::Success);
+        }
+    }
+
+    #[test]
+    fn test_ffi_diagnostic_signature_verifies_and_replay_is_rejected() {
+        unsafe {
+            let raw_payload = [1u8; 32];
+            let epoch_id = [1u8; 32];
+            let input_state = [0u8; 32];
+            let output_state = [0u8; 32];
+            let transition_id = 1u64;
+            let timestamp_ms = 1_000u64;
+            let mut authority_id = [0u8; 32];
+            let mut signature = [0u8; 64];
+
+            let mut authority_engine = ptr::null_mut();
+            let mut epoch_engine = ptr::null_mut();
+            let mut policy_engine = ptr::null_mut();
+            let mut verifier = ptr::null_mut();
+            let mut policy = ptr::null_mut();
+
+            assert_eq!(
+                laurn_authority_engine_create(std::ptr::from_mut(&mut authority_engine)),
+                LaurnResult::Success
+            );
+            assert_eq!(
+                laurn_authority_engine_register_diagnostic_authority(authority_engine),
+                LaurnResult::Success
+            );
+
+            assert_eq!(
+                laurn_epoch_engine_create(std::ptr::from_mut(&mut epoch_engine)),
+                LaurnResult::Success
+            );
+            assert_eq!(
+                laurn_epoch_engine_register(
+                    epoch_engine,
+                    std::ptr::from_ref(&epoch_id),
+                    1,
+                    500,
+                    1_500,
+                    std::ptr::from_ref(&input_state),
+                ),
+                LaurnResult::Success
+            );
+            assert_eq!(
+                laurn_epoch_engine_activate(epoch_engine, std::ptr::from_ref(&epoch_id)),
+                LaurnResult::Success
+            );
+
+            assert_eq!(
+                laurn_policy_engine_create(std::ptr::from_mut(&mut policy_engine)),
+                LaurnResult::Success
+            );
+            assert_eq!(
+                laurn_policy_create_default(std::ptr::from_mut(&mut policy)),
+                LaurnResult::Success
+            );
+            assert_eq!(
+                laurn_verification_engine_create(std::ptr::from_mut(&mut verifier)),
+                LaurnResult::Success
+            );
+
+            assert_eq!(
+                laurn_diagnostic_sign_transition(
+                    transition_id,
+                    std::ptr::from_ref(&epoch_id),
+                    timestamp_ms,
+                    std::ptr::from_ref(&input_state),
+                    std::ptr::from_ref(&output_state),
+                    raw_payload.as_ptr(),
+                    raw_payload.len(),
+                    std::ptr::from_mut(&mut authority_id),
+                    std::ptr::from_mut(&mut signature),
+                ),
+                LaurnResult::Success
+            );
+
+            let transition = LaurnTransitionHandle {
+                inner: build_transition(
+                    transition_id,
+                    authority_id,
+                    epoch_id,
+                    timestamp_ms,
+                    input_state,
+                    output_state,
+                    &raw_payload,
+                ),
+            };
+
+            let params = LaurnVerificationParams {
+                transition: std::ptr::from_ref(&transition),
+                raw_payload: raw_payload.as_ptr(),
+                raw_payload_len: raw_payload.len(),
+                signature: std::ptr::from_ref(&signature),
+                expected_input_state: std::ptr::from_ref(&input_state),
+                generated_output_state: std::ptr::from_ref(&output_state),
+                authority_engine,
+                epoch_engine,
+                policy_engine,
+                policy,
+                parent_state_timestamp_ms: timestamp_ms,
+                has_evidence: false,
+                transition_protocol_version: 1,
+                transition_class: 1,
+            };
+
+            assert_eq!(
+                laurn_verify_transition(verifier, std::ptr::from_ref(&params)),
+                LaurnResult::Success
+            );
+            assert_eq!(
+                laurn_verify_transition(verifier, std::ptr::from_ref(&params)),
+                LaurnResult::VerificationDuplicate
+            );
+
+            assert_eq!(laurn_policy_destroy(policy), LaurnResult::Success);
+            assert_eq!(
+                laurn_verification_engine_destroy(verifier),
+                LaurnResult::Success
+            );
+            assert_eq!(
+                laurn_policy_engine_destroy(policy_engine),
+                LaurnResult::Success
+            );
+            assert_eq!(
+                laurn_epoch_engine_destroy(epoch_engine),
+                LaurnResult::Success
+            );
+            assert_eq!(
+                laurn_authority_engine_destroy(authority_engine),
+                LaurnResult::Success
+            );
         }
     }
 

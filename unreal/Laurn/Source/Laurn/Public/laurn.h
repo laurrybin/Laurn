@@ -216,8 +216,14 @@ LaurnResult laurn_verify_transition(
 // ----------------------------------------------------------------------------
 
 LaurnResult laurn_diagnostic_sign_transition(
+    uint64_t transition_id,
+    const uint8_t (*epoch_id)[32],
+    uint64_t timestamp_ms,
+    const uint8_t (*input_state_commitment)[32],
+    const uint8_t (*output_state_commitment)[32],
     const uint8_t* raw_payload,
     size_t raw_payload_len,
+    uint8_t (*out_authority_id)[32],
     uint8_t (*out_signature)[64]
 );
 // ----------------------------------------------------------------------------

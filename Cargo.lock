@@ -711,6 +711,7 @@ name = "laurn-c"
 version = "0.1.0"
 dependencies = [
  "authority",
+ "borsh",
  "commitment",
  "delta",
  "ed25519-dalek",
