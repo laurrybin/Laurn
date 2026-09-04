@@ -23,7 +23,7 @@ use std::slice;
 use authority::AuthorityEngine;
 use commitment::{CommitmentEngine, StateCommitment};
 use delta::StateDelta;
-use epoch::EpochEngine;
+use epoch::{Epoch, EpochEngine, EpochId, EpochStatus};
 use policy::{Policy, PolicyEngine, TransitionClass};
 use protocol::codec::LaurnCodec;
 use protocol::LaurnMessage;
@@ -222,6 +222,71 @@ pub unsafe extern "C" fn laurn_epoch_engine_destroy(
 
         let _ = Box::from_raw(handle);
         LaurnResult::Success
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn laurn_epoch_engine_register(
+    handle: *mut LaurnEpochEngineHandle,
+    epoch_id: *const [u8; 32],
+    sequence: u64,
+    start_time_ms: u64,
+    expiration_time_ms: u64,
+    initial_state: *const [u8; 32],
+) -> LaurnResult {
+    catch_unwind_ffi(|| {
+        if handle.is_null() || epoch_id.is_null() || initial_state.is_null() {
+            return LaurnResult::NullPointer;
+        }
+
+        let engine = &mut (*handle).inner;
+        let epoch = Epoch {
+            id: EpochId(*epoch_id),
+            sequence,
+            start_time_ms,
+            expiration_time_ms,
+            status: EpochStatus::Pending,
+            initial_state: StateCommitment(*initial_state),
+        };
+
+        match engine.register_epoch(epoch) {
+            Ok(()) => LaurnResult::Success,
+            Err(_) => LaurnResult::InvalidConfig,
+        }
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn laurn_epoch_engine_activate(
+    handle: *mut LaurnEpochEngineHandle,
+    epoch_id: *const [u8; 32],
+) -> LaurnResult {
+    catch_unwind_ffi(|| {
+        if handle.is_null() || epoch_id.is_null() {
+            return LaurnResult::NullPointer;
+        }
+
+        match (*handle).inner.activate_epoch(EpochId(*epoch_id)) {
+            Ok(()) => LaurnResult::Success,
+            Err(_) => LaurnResult::InvalidConfig,
+        }
+    })
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn laurn_epoch_engine_close(
+    handle: *mut LaurnEpochEngineHandle,
+    epoch_id: *const [u8; 32],
+) -> LaurnResult {
+    catch_unwind_ffi(|| {
+        if handle.is_null() || epoch_id.is_null() {
+            return LaurnResult::NullPointer;
+        }
+
+        match (*handle).inner.close_epoch(EpochId(*epoch_id)) {
+            Ok(()) => LaurnResult::Success,
+            Err(_) => LaurnResult::InvalidConfig,
+        }
     })
 }
 
@@ -1011,6 +1076,58 @@ mod tests {
             assert!(!handle.is_null());
 
             assert_eq!(laurn_authority_engine_destroy(handle), LaurnResult::Success);
+        }
+    }
+
+    #[test]
+    fn test_ffi_epoch_lifecycle() {
+        unsafe {
+            let mut handle: *mut LaurnEpochEngineHandle = ptr::null_mut();
+            let epoch_id = [7u8; 32];
+            let initial_state = [0u8; 32];
+
+            assert_eq!(
+                laurn_epoch_engine_create(std::ptr::from_mut(&mut handle)),
+                LaurnResult::Success
+            );
+            assert!(!handle.is_null());
+
+            assert_eq!(
+                laurn_epoch_engine_register(
+                    handle,
+                    std::ptr::from_ref(&epoch_id),
+                    7,
+                    1_000,
+                    2_000,
+                    std::ptr::from_ref(&initial_state),
+                ),
+                LaurnResult::Success
+            );
+
+            assert_eq!(
+                laurn_epoch_engine_activate(handle, std::ptr::from_ref(&epoch_id)),
+                LaurnResult::Success
+            );
+
+            assert!((*handle)
+                .inner
+                .validate_transition_binding(&EpochId(epoch_id), 1_500));
+
+            assert_eq!(
+                laurn_epoch_engine_close(handle, std::ptr::from_ref(&epoch_id)),
+                LaurnResult::Success
+            );
+
+            assert!(!(*handle)
+                .inner
+                .validate_transition_binding(&EpochId(epoch_id), 1_500));
+
+            assert_eq!(
+                laurn_epoch_engine_activate(handle, std::ptr::from_ref(&epoch_id)),
+                LaurnResult::InvalidConfig
+            );
+
+            assert_eq!(laurn_epoch_engine_destroy(handle), LaurnResult::Success);
         }
     }
 

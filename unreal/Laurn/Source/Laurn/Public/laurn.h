@@ -71,6 +71,25 @@ LaurnResult laurn_authority_engine_register_diagnostic_authority(LaurnAuthorityE
 LaurnResult laurn_epoch_engine_create(LaurnEpochEngineHandle** out_handle);
 LaurnResult laurn_epoch_engine_destroy(LaurnEpochEngineHandle* handle);
 
+LaurnResult laurn_epoch_engine_register(
+    LaurnEpochEngineHandle* handle,
+    const uint8_t (*epoch_id)[32],
+    uint64_t sequence,
+    uint64_t start_time_ms,
+    uint64_t expiration_time_ms,
+    const uint8_t (*initial_state)[32]
+);
+
+LaurnResult laurn_epoch_engine_activate(
+    LaurnEpochEngineHandle* handle,
+    const uint8_t (*epoch_id)[32]
+);
+
+LaurnResult laurn_epoch_engine_close(
+    LaurnEpochEngineHandle* handle,
+    const uint8_t (*epoch_id)[32]
+);
+
 // ----------------------------------------------------------------------------
 // Policy Engine Operations
 // ----------------------------------------------------------------------------
