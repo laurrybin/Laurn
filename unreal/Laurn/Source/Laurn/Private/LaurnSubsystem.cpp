@@ -135,6 +135,7 @@ void ULaurnSubsystem::RegisterStateComponent(ULaurnStateComponent* Component)
 	if (Component && !RegisteredStateComponents.Contains(Component))
 	{
 		RegisteredStateComponents.Add(Component);
+		RefreshCanonicalStateCommitment();
 	}
 }
 
@@ -143,6 +144,7 @@ void ULaurnSubsystem::UnregisterStateComponent(ULaurnStateComponent* Component)
 	if (Component)
 	{
 		RegisteredStateComponents.Remove(Component);
+		RefreshCanonicalStateCommitment();
 	}
 }
 
@@ -170,8 +172,40 @@ bool ULaurnSubsystem::ComputeGlobalStateCommitment(TArray<uint8>& OutHash) const
 	return ComputeStateCommitment(GlobalStateBuffer, OutHash);
 }
 
-bool ULaurnSubsystem::VerifyIncomingTransition(const TArray<uint8>& TransitionPayload) const
+bool ULaurnSubsystem::RefreshCanonicalStateCommitment()
 {
+	TArray<uint8> StateHash;
+	if (ComputeGlobalStateCommitment(StateHash) == false)
+	{
+		CanonicalStateCommitment.Reset();
+		bHasCanonicalState = false;
+		bHasCanonicalTimestamp = false;
+		return false;
+	}
+
+	if (StateHash.Num() == 32)
+	{
+		CanonicalStateCommitment = MoveTemp(StateHash);
+		CanonicalStateTimestampMs = 0;
+		bHasCanonicalState = true;
+		bHasCanonicalTimestamp = false;
+		return true;
+	}
+
+	CanonicalStateCommitment.Reset();
+	bHasCanonicalState = false;
+	bHasCanonicalTimestamp = false;
+	return false;
+}
+
+bool ULaurnSubsystem::VerifyIncomingTransition(const TArray<uint8>& TransitionPayload)
+{
+	if (bHasCanonicalState == false || (CanonicalStateCommitment.Num() == 32) == false)
+	{
+		UE_LOG(LogLaurn, Warning, TEXT("Canonical state has not been initialized."));
+		return false;
+	}
+
 	if (TransitionPayload.Num() == 0 || !VerificationEngine)
 	{
 		return false;
@@ -215,8 +249,16 @@ bool ULaurnSubsystem::VerifyIncomingTransition(const TArray<uint8>& TransitionPa
 	uint32_t ProtocolVersion = 1;
 	laurn_message_get_protocol_version(MessageHandle, &ProtocolVersion);
 
-	uint32_t TransitionClass = 1;
-	laurn_transition_get_class(TransitionHandle, &TransitionClass);
+	uint32_t TransitionClass = 0;
+	uint64_t TransitionTimestampMs = 0;
+
+	if (laurn_transition_get_class(TransitionHandle, &TransitionClass) != LAURN_SUCCESS ||
+		laurn_transition_get_timestamp_ms(TransitionHandle, &TransitionTimestampMs) != LAURN_SUCCESS)
+	{
+		laurn_transition_destroy(TransitionHandle);
+		laurn_message_destroy(MessageHandle);
+		return false;
+	}
 
 	// 3. Generate expected output state commitment (Global State hash)
 	TArray<uint8> OutputStateHash;
@@ -235,8 +277,7 @@ bool ULaurnSubsystem::VerifyIncomingTransition(const TArray<uint8>& TransitionPa
 	Params.raw_payload = RawPayload;
 	Params.raw_payload_len = RawPayloadLen;
 	Params.signature = &Signature;
-	uint8_t ZeroState[32] = {0};
-	Params.expected_input_state = &ZeroState;
+	Params.expected_input_state = static_cast<const uint8_t(*)[32]>(static_cast<const void*>(CanonicalStateCommitment.GetData()));
 	Params.generated_output_state = static_cast<uint8_t(*)[32]>(static_cast<void*>(OutputStateHash.GetData()));
 	Params.authority_engine = AuthorityEngine;
 	Params.epoch_engine = EpochEngine;
@@ -245,12 +286,20 @@ bool ULaurnSubsystem::VerifyIncomingTransition(const TArray<uint8>& TransitionPa
 	laurn_policy_create_default(&PolicyHandle);
 	Params.policy = PolicyHandle; 
 	
-	Params.parent_state_timestamp_ms = 0;
+	Params.parent_state_timestamp_ms = bHasCanonicalTimestamp ? CanonicalStateTimestampMs : TransitionTimestampMs;
 	Params.has_evidence = false;
 	Params.transition_protocol_version = ProtocolVersion;
 	Params.transition_class = TransitionClass;
 
 	LaurnResult VerifyResult = laurn_verify_transition(VerificationEngine, &Params);
+
+	if (VerifyResult == LAURN_SUCCESS)
+	{
+		CanonicalStateCommitment = OutputStateHash;
+		CanonicalStateTimestampMs = TransitionTimestampMs;
+		bHasCanonicalState = true;
+		bHasCanonicalTimestamp = true;
+	}
 
 	if (VerifyResult == LAURN_SUCCESS && ReplayRecorder != nullptr)
 	{

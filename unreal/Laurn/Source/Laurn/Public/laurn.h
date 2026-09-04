@@ -177,6 +177,11 @@ LaurnResult laurn_transition_get_class(
 // State Commitment
 // ----------------------------------------------------------------------------
 
+LaurnResult laurn_transition_get_timestamp_ms(
+    const LaurnTransitionHandle* transition,
+    uint64_t* out_timestamp_ms
+);
+
 LaurnResult laurn_state_commitment_compute(
     const uint8_t* buffer,
     size_t buffer_len,

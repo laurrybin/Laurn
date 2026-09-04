@@ -677,6 +677,21 @@ pub unsafe extern "C" fn laurn_transition_get_class(
 // ----------------------------------------------------------------------------
 
 #[no_mangle]
+pub unsafe extern "C" fn laurn_transition_get_timestamp_ms(
+    transition: *const LaurnTransitionHandle,
+    out_timestamp_ms: *mut u64,
+) -> LaurnResult {
+    catch_unwind_ffi(|| {
+        if transition.is_null() || out_timestamp_ms.is_null() {
+            return LaurnResult::NullPointer;
+        }
+
+        *out_timestamp_ms = (*transition).inner.metadata.timestamp_ms;
+        LaurnResult::Success
+    })
+}
+
+#[no_mangle]
 pub unsafe extern "C" fn laurn_state_commitment_compute(
     buffer: *const u8,
     buffer_len: usize,
@@ -1281,6 +1296,16 @@ mod tests {
                 ),
                 transition_class: TransitionClass::INPUT.bits(),
             };
+
+            let mut extracted_timestamp = 0u64;
+            assert_eq!(
+                laurn_transition_get_timestamp_ms(
+                    std::ptr::from_ref(&transition),
+                    std::ptr::from_mut(&mut extracted_timestamp),
+                ),
+                LaurnResult::Success
+            );
+            assert_eq!(extracted_timestamp, timestamp_ms);
 
             let params = LaurnVerificationParams {
                 transition: std::ptr::from_ref(&transition),

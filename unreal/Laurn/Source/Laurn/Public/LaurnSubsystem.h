@@ -65,7 +65,7 @@ public:
 	 * @return True if verification succeeds, false otherwise.
 	 */
 	UFUNCTION(BlueprintCallable, Category = "LAURN|Network")
-	bool VerifyIncomingTransition(const TArray<uint8>& TransitionPayload) const;
+	bool VerifyIncomingTransition(const TArray<uint8>& TransitionPayload);
 
 	UFUNCTION(BlueprintCallable, Category = "LAURN|Replay")
 	bool StartRecording();
@@ -91,6 +91,11 @@ private:
 	LaurnReplayRecorderHandle* ReplayRecorder = nullptr;
 	LaurnReplayReaderHandle* ReplayReader = nullptr;
 	TArray<uint8> ReplayBuffer;
+	TArray<uint8> CanonicalStateCommitment;
+	uint64 CanonicalStateTimestampMs = 0;
+	bool bHasCanonicalState = false;
+	bool bHasCanonicalTimestamp = false;
+	bool RefreshCanonicalStateCommitment();
 
 	// Registry of all tracked state components
 	UPROPERTY()
