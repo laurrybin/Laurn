@@ -83,6 +83,7 @@ pub struct LaurnPolicyEngineHandle {
 
 pub struct LaurnVerificationEngineHandle {
     pub(crate) inner: VerificationEngine,
+    pub(crate) seen_transitions: std::sync::Mutex<verification::replay::ReplayBuffer>,
 }
 
 pub struct LaurnTransitionHandle {
@@ -312,7 +313,10 @@ pub unsafe extern "C" fn laurn_verification_engine_create(
         }
 
         let engine = VerificationEngine::new();
-        let handle = Box::new(LaurnVerificationEngineHandle { inner: engine });
+        let handle = Box::new(LaurnVerificationEngineHandle {
+            inner: engine,
+            seen_transitions: std::sync::Mutex::new(verification::replay::ReplayBuffer::default()),
+        });
 
         *out_handle = Box::into_raw(handle);
 
@@ -665,7 +669,11 @@ pub unsafe extern "C" fn laurn_verify_transition(
         let policy = &(*p.policy).inner;
         let transition_class = TransitionClass::from_bits_truncate(p.transition_class);
 
-        let seen_transitions = verification::replay::ReplayBuffer::default();
+        let verifier = &*verifier;
+        let mut seen_transitions = match verifier.seen_transitions.lock() {
+            Ok(buffer) => buffer,
+            Err(_) => return LaurnResult::Panic,
+        };
 
         let ctx = VerificationContext {
             transition: &transition,
@@ -684,10 +692,14 @@ pub unsafe extern "C" fn laurn_verify_transition(
             transition_class,
         };
 
-        let v = &(*verifier).inner;
+        let result = verifier.inner.verify(&ctx);
+        drop(ctx);
 
-        match v.verify(&ctx) {
-            VerificationResult::Valid => LaurnResult::Success,
+        match result {
+            VerificationResult::Valid => {
+                seen_transitions.insert(transition.id);
+                LaurnResult::Success
+            }
             VerificationResult::Duplicate(_) => LaurnResult::VerificationDuplicate,
             VerificationResult::StateMismatch(_) => LaurnResult::VerificationStateMismatch,
             _ => LaurnResult::VerificationFailed,
