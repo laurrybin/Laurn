@@ -61,6 +61,7 @@ int main()
     std::vector<uint8_t> raw_payload(32, 0x01);
 
     uint64_t transition_id = 1;
+    uint32_t transition_class = 1;
     uint8_t authority_id[32] = {0};
     uint8_t epoch_id[32] = {0x01};
     uint64_t timestamp_ms = 1000;
@@ -86,6 +87,7 @@ int main()
     uint8_t signature[64] = {0};
     if (laurn_diagnostic_sign_transition(
             transition_id,
+            transition_class,
             &epoch_id,
             timestamp_ms,
             &input_state,
@@ -103,8 +105,8 @@ int main()
 
     if (laurn_protocol_encode_transition_message(
             1, // protocol version
-            1, // transition class
-            transition_id, // id
+            transition_class,
+            transition_id,
             &authority_id,
             &epoch_id,
             timestamp_ms,

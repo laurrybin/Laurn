@@ -44,13 +44,15 @@ fn generate_benchmark_transition(signing_key: &SigningKey) -> LaurnMessage {
         payload_commitment,
     };
 
-    let serialized_transition = borsh::to_vec(&transition).unwrap_or_else(|_| vec![]);
+    let serialized_transition =
+        verification::transition_signing_bytes(&transition, 1).unwrap_or_else(|_| vec![]);
     let signature = signing_key.sign(&serialized_transition).to_bytes();
 
     LaurnMessage {
         version: ProtocolVersion::new(1, 0, 0),
         payload: LaurnMessagePayload::Transition(TransitionMessage {
             transition,
+            transition_class: 1,
             raw_payload: payload_bytes,
             signature,
         }),
@@ -167,7 +169,7 @@ fn bench_verification_latency(c: &mut Criterion) {
                 parent_state_timestamp_ms: 1000,
                 has_evidence: false,
                 transition_protocol_version: 1,
-                transition_class: TransitionClass::from_bits_truncate(1),
+                transition_class: TransitionClass::from_bits_truncate(t.transition_class),
             };
 
             let result = verifier.verify(black_box(&ctx));

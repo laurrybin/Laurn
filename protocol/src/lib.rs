@@ -69,6 +69,7 @@ pub struct StateMessage {
 #[derive(Debug, Clone, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
 pub struct TransitionMessage {
     pub transition: Transition,
+    pub transition_class: u32,
     pub raw_payload: Vec<u8>,
     pub signature: [u8; 64],
 }

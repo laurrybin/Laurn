@@ -113,11 +113,15 @@ fn main() -> Result<(), String> {
         };
 
         // Create LaurnMessage
-        let transition_bytes = borsh::to_vec(&transition).map_err(|e| e.to_string())?;
+        let transition_class = 1u32;
+        let transition_bytes =
+            verification::transition_signing_bytes(&transition, transition_class)
+                .map_err(|e| e.to_string())?;
         let signature = s1.signing_key.sign(&transition_bytes).to_bytes();
 
         let transition_msg = TransitionMessage {
             transition,
+            transition_class,
             raw_payload,
             signature,
         };

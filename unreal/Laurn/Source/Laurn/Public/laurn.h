@@ -217,6 +217,7 @@ LaurnResult laurn_verify_transition(
 
 LaurnResult laurn_diagnostic_sign_transition(
     uint64_t transition_id,
+    uint32_t transition_class,
     const uint8_t (*epoch_id)[32],
     uint64_t timestamp_ms,
     const uint8_t (*input_state_commitment)[32],

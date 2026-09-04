@@ -23,6 +23,20 @@ pub mod replay;
 /// Maximum allowed size for a transition payload (4MB) to prevent memory `DoS` attacks.
 pub const MAX_TRANSITION_PAYLOAD_SIZE: usize = 4 * 1024 * 1024;
 
+/// Builds the canonical bytes authenticated by a transition signature.
+///
+/// # Errors
+///
+/// Returns an error if the signed fields cannot be serialized.
+pub fn transition_signing_bytes(
+    transition: &Transition,
+    transition_class: u32,
+) -> std::io::Result<Vec<u8>> {
+    let mut bytes = borsh::to_vec(transition)?;
+    bytes.extend_from_slice(&borsh::to_vec(&transition_class)?);
+    Ok(bytes)
+}
+
 /// The definitive result of evaluating a state transition through the Verification Engine.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VerificationResult {
@@ -113,17 +127,18 @@ impl VerificationEngine {
 
         // 3. Cryptographic Signature Validation
         // The signature MUST cover the entire serialized Transition struct to prevent cross-epoch replay attacks.
-        let Ok(serialized_transition) = borsh::to_vec(ctx.transition) else {
+        let Ok(signed_bytes) =
+            transition_signing_bytes(ctx.transition, ctx.transition_class.bits())
+        else {
             return VerificationResult::Invalid(
                 "Failed to serialize transition for signature verification",
             );
         };
 
-        if let Err(e) = ctx.authority_engine.verify_signature(
-            authority_id,
-            &serialized_transition,
-            ctx.signature,
-        ) {
+        if let Err(e) =
+            ctx.authority_engine
+                .verify_signature(authority_id, &signed_bytes, ctx.signature)
+        {
             if e == "Unauthorized authority" {
                 return VerificationResult::Unknown("Authority not registered");
             }
@@ -289,7 +304,8 @@ mod tests {
         let raw_payload = b"move_forward";
         let transition = create_valid_transition(auth_id, epoch_id, 1500, raw_payload);
 
-        let serialized_transition = borsh::to_vec(&transition)?;
+        let serialized_transition =
+            transition_signing_bytes(&transition, TransitionClass::INPUT.bits())?;
         let signature = signing_key.sign(&serialized_transition);
 
         let engine = VerificationEngine::new();
@@ -325,13 +341,9 @@ mod tests {
         let raw_payload = b"move_forward";
         let transition = create_valid_transition(auth_id, epoch_id, 1500, raw_payload);
 
-        // We sign a DIFFERENT transition payload
-        let mut tampered_transition = transition.clone();
-        tampered_transition.id = TransitionId(999); // Tampered!
-        let serialized_tampered = borsh::to_vec(&tampered_transition)?;
-
-        // Sign the tampered data, but submit the original transition. Signature will fail.
-        let signature = signing_key.sign(&serialized_tampered);
+        let signed_with_different_class =
+            transition_signing_bytes(&transition, TransitionClass::SPAWN.bits())?;
+        let signature = signing_key.sign(&signed_with_different_class);
 
         let engine = VerificationEngine::new();
         let sig_bytes = signature.to_bytes();
@@ -369,7 +381,8 @@ mod tests {
         let raw_payload = b"move_forward";
         // Epoch expires at 2000. 2500 is out of bounds.
         let transition = create_valid_transition(auth_id, epoch_id, 2500, raw_payload);
-        let serialized_transition = borsh::to_vec(&transition)?;
+        let serialized_transition =
+            transition_signing_bytes(&transition, TransitionClass::INPUT.bits())?;
         let signature = signing_key.sign(&serialized_transition);
 
         let engine = VerificationEngine::new();
@@ -411,7 +424,8 @@ mod tests {
 
         let raw_payload = b"move_forward";
         let transition = create_valid_transition(unregistered_id, epoch_id, 1500, raw_payload);
-        let serialized_transition = borsh::to_vec(&transition)?;
+        let serialized_transition =
+            transition_signing_bytes(&transition, TransitionClass::INPUT.bits())?;
         let signature = unregistered_key.sign(&serialized_transition);
 
         let engine = VerificationEngine::new();
@@ -449,7 +463,8 @@ mod tests {
 
         let raw_payload = b"move_forward";
         let transition = create_valid_transition(auth_id, epoch_id, 1500, raw_payload);
-        let serialized_transition = borsh::to_vec(&transition)?;
+        let serialized_transition =
+            transition_signing_bytes(&transition, TransitionClass::INPUT.bits())?;
         let signature = signing_key.sign(&serialized_transition);
 
         let engine = VerificationEngine::new();
@@ -487,7 +502,8 @@ mod tests {
 
         let raw_payload = b"move_forward";
         let transition = create_valid_transition(auth_id, epoch_id, 1500, raw_payload);
-        let serialized_transition = borsh::to_vec(&transition)?;
+        let serialized_transition =
+            transition_signing_bytes(&transition, TransitionClass::INPUT.bits())?;
         let signature = signing_key.sign(&serialized_transition);
 
         let engine = VerificationEngine::new();
@@ -527,7 +543,8 @@ mod tests {
 
         let raw_payload = b"move_forward";
         let transition = create_valid_transition(auth_id, epoch_id, 1500, raw_payload);
-        let serialized_transition = borsh::to_vec(&transition)?;
+        let serialized_transition =
+            transition_signing_bytes(&transition, TransitionClass::INPUT.bits())?;
         let signature = signing_key.sign(&serialized_transition);
 
         let engine = VerificationEngine::new();
@@ -567,7 +584,8 @@ mod tests {
 
         let raw_payload = b"move_forward";
         let transition = create_valid_transition(auth_id, epoch_id, 1500, raw_payload);
-        let serialized_transition = borsh::to_vec(&transition)?;
+        let serialized_transition =
+            transition_signing_bytes(&transition, TransitionClass::INPUT.bits())?;
         let signature = signing_key.sign(&serialized_transition);
 
         let engine = VerificationEngine::new();
@@ -610,7 +628,8 @@ mod tests {
         // USE AN INVALID EPOCH
         let invalid_epoch_id = EpochId([99u8; 32]);
         let transition = create_valid_transition(auth_id, invalid_epoch_id, 1500, raw_payload);
-        let serialized_transition = borsh::to_vec(&transition)?;
+        let serialized_transition =
+            transition_signing_bytes(&transition, TransitionClass::INPUT.bits())?;
         let signature = signing_key.sign(&serialized_transition);
 
         let engine = VerificationEngine::new();
@@ -650,7 +669,8 @@ mod tests {
 
         let raw_payload = b"move_forward";
         let transition = create_valid_transition(auth_id, epoch_id, 1500, raw_payload);
-        let serialized_transition = borsh::to_vec(&transition)?;
+        let serialized_transition =
+            transition_signing_bytes(&transition, TransitionClass::INPUT.bits())?;
         let signature = signing_key.sign(&serialized_transition);
 
         let engine = VerificationEngine::new();

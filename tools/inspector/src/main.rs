@@ -165,7 +165,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     parent_state_timestamp_ms: 0,
                     has_evidence: false,
                     transition_protocol_version: 1,
-                    transition_class: TransitionClass::from_bits_truncate(1),
+                    transition_class: TransitionClass::from_bits_truncate(t.transition_class),
                 };
 
                 let result = verifier.verify(&ctx);

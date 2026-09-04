@@ -89,6 +89,7 @@ pub struct LaurnVerificationEngineHandle {
 
 pub struct LaurnTransitionHandle {
     pub(crate) inner: Transition,
+    pub(crate) transition_class: u32,
 }
 
 pub struct LaurnDeltaHandle {
@@ -478,7 +479,7 @@ fn build_transition(
 #[no_mangle]
 pub unsafe extern "C" fn laurn_protocol_encode_transition_message(
     protocol_version: u32,
-    _transition_class: u32,
+    transition_class: u32,
     transition_id: u64,
     authority_id: *const [u8; 32],
     epoch_id: *const [u8; 32],
@@ -519,6 +520,7 @@ pub unsafe extern "C" fn laurn_protocol_encode_transition_message(
 
         let t_msg = protocol::TransitionMessage {
             transition: trans,
+            transition_class,
             raw_payload: raw_payload_slice.to_vec(),
             signature: sig,
         };
@@ -573,6 +575,7 @@ pub unsafe extern "C" fn laurn_message_get_transition(
         if let protocol::LaurnMessagePayload::Transition(ref t) = msg.payload {
             let handle = Box::new(LaurnTransitionHandle {
                 inner: t.transition.clone(),
+                transition_class: t.transition_class,
             });
             *out_transition = Box::into_raw(handle);
             LaurnResult::Success
@@ -664,8 +667,7 @@ pub unsafe extern "C" fn laurn_transition_get_class(
             return LaurnResult::NullPointer;
         }
 
-        // Default to transition class 1 if transition doesn't explicitly declare it
-        *out_class = 1;
+        *out_class = (*transition).transition_class;
         LaurnResult::Success
     })
 }
@@ -756,7 +758,9 @@ pub unsafe extern "C" fn laurn_verify_transition(
         let epoch_engine = &(*p.epoch_engine).inner;
         let policy_engine = &(*p.policy_engine).inner;
         let policy = &(*p.policy).inner;
-        let transition_class = TransitionClass::from_bits_truncate(p.transition_class);
+        let Some(transition_class) = TransitionClass::from_bits(p.transition_class) else {
+            return LaurnResult::VerificationFailed;
+        };
 
         let verifier = &*verifier;
         let mut seen_transitions = match verifier.seen_transitions.lock() {
@@ -803,6 +807,7 @@ pub unsafe extern "C" fn laurn_verify_transition(
 #[no_mangle]
 pub unsafe extern "C" fn laurn_diagnostic_sign_transition(
     transition_id: u64,
+    transition_class: u32,
     epoch_id: *const [u8; 32],
     timestamp_ms: u64,
     input_state_commitment: *const [u8; 32],
@@ -837,11 +842,17 @@ pub unsafe extern "C" fn laurn_diagnostic_sign_transition(
             payload,
         );
 
-        let Ok(serialized_transition) = borsh::to_vec(&transition) else {
+        if TransitionClass::from_bits(transition_class).is_none() {
+            return LaurnResult::InvalidConfig;
+        }
+
+        let Ok(signed_bytes) =
+            verification::transition_signing_bytes(&transition, transition_class)
+        else {
             return LaurnResult::EncodeFailed;
         };
 
-        let signature = signing_key.sign(&serialized_transition);
+        let signature = signing_key.sign(&signed_bytes);
 
         *out_authority_id = authority_id;
         ptr::copy_nonoverlapping(
@@ -1245,6 +1256,7 @@ mod tests {
             assert_eq!(
                 laurn_diagnostic_sign_transition(
                     transition_id,
+                    TransitionClass::INPUT.bits(),
                     std::ptr::from_ref(&epoch_id),
                     timestamp_ms,
                     std::ptr::from_ref(&input_state),
@@ -1267,6 +1279,7 @@ mod tests {
                     output_state,
                     &raw_payload,
                 ),
+                transition_class: TransitionClass::INPUT.bits(),
             };
 
             let params = LaurnVerificationParams {
