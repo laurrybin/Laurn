@@ -38,8 +38,7 @@ void ALaurnPlayerController::ServerSubmitTransition_Implementation(const TArray<
 
 				if (bIsValid)
 				{
-					// If verified, apply the state change dictated by the transition payload to the server's authoritative state
-					UE_LOG(LogTemp, Log, TEXT("LAURN Verification SUCCESS. Applying transition."));
+					UE_LOG(LogTemp, Log, TEXT("LAURN verification succeeded. Transition accepted for authoritative game logic."));
 				}
 				else
 				{
