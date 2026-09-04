@@ -108,6 +108,7 @@ mod tests {
                 PlatformIntegrityError::UnsupportedPlatform
             );
         }
+        Ok(())
     }
 
     #[test]
@@ -122,5 +123,6 @@ mod tests {
                 PlatformIntegrityError::UnsupportedPlatform
             );
         }
+        Ok(())
     }
 }

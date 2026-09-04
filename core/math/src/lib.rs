@@ -188,6 +188,7 @@ mod tests {
         assert!(CanonicalF32::new(f32::INFINITY).is_err());
         assert!(CanonicalF32::new(f32::NEG_INFINITY).is_err());
         assert!(CanonicalF32::new(1.0).is_ok());
+        Ok(())
     }
 
     #[test]
@@ -200,6 +201,7 @@ mod tests {
 
         // Assert the internal representation is exactly positive zero
         assert!(neg_zero.get().is_sign_positive());
+        Ok(())
     }
 
     #[test]
@@ -211,6 +213,7 @@ mod tests {
         let bytes2 = borsh::to_vec(&val2)?;
 
         assert_eq!(bytes1, bytes2);
+        Ok(())
     }
 
     #[test]
@@ -226,5 +229,6 @@ mod tests {
         let bytes2 = borsh::to_vec(&vec2)?;
 
         assert_eq!(bytes1, bytes2);
+        Ok(())
     }
 }

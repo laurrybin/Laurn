@@ -207,6 +207,7 @@ mod tests {
         // Unauthorized (unknown) authority checks gracefully fail
         let (_, unknown_id) = generate_keypair();
         assert!(!engine.check_capability(&unknown_id, AuthorityCapability::CAN_SUBMIT_TRANSITION));
+        Ok(())
     }
 
     #[test]
@@ -242,6 +243,7 @@ mod tests {
         assert!(engine
             .verify_signature(&unknown_id, payload, &signature.to_bytes())
             .is_err());
+        Ok(())
     }
 
     #[test]
@@ -269,5 +271,6 @@ mod tests {
         // Remove authority
         engine.remove_authority(&auth_id)?;
         assert!(!engine.check_capability(&auth_id, AuthorityCapability::CAN_SUBMIT_TRANSITION));
+        Ok(())
     }
 }

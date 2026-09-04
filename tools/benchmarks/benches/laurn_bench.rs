@@ -102,7 +102,7 @@ fn bench_encoding_latency(c: &mut Criterion) {
                 Ok(msg) => msg,
                 Err(_) => return,
             };
-            black_box(decoded)
+            black_box(decoded);
         })
     });
 }
@@ -111,7 +111,6 @@ fn bench_verification_latency(c: &mut Criterion) {
     let mut csprng = OsRng;
     let signing_key = SigningKey::generate(&mut csprng);
     let msg = generate_benchmark_transition(&signing_key);
-    let raw_payload = borsh::to_vec(&msg).unwrap_or_else(|_| vec![]);
 
     let mut authority_engine = AuthorityEngine::new();
     let authority_id = AuthorityId(signing_key.verifying_key().to_bytes());

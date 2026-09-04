@@ -141,6 +141,7 @@ mod tests {
         let decoded: LaurnMessage = borsh::from_slice(&bytes)?;
 
         assert_eq!(msg, decoded);
+        Ok(())
     }
 
     #[test]
@@ -161,5 +162,6 @@ mod tests {
         assert_eq!(decoded_version.major, 2);
         assert_eq!(decoded_version.minor, 5);
         assert_eq!(decoded_version.patch, 1);
+        Ok(())
     }
 }

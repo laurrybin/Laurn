@@ -205,7 +205,7 @@ mod tests {
         (signing_key, AuthorityId(verifying_key.to_bytes()))
     }
 
-    fn setup_environment() -> (
+    type TestEnvironment = (
         AuthorityEngine,
         EpochEngine,
         PolicyEngine,
@@ -213,7 +213,9 @@ mod tests {
         SigningKey,
         AuthorityId,
         EpochId,
-    ) {
+    );
+
+    fn setup_environment() -> Result<TestEnvironment, Box<dyn std::error::Error>> {
         let mut auth_engine = AuthorityEngine::new();
         let mut epoch_engine = EpochEngine::new();
         let policy_engine = PolicyEngine::new();
@@ -249,7 +251,7 @@ mod tests {
             minimum_capability: AuthorityCapability::CAN_SUBMIT_TRANSITION,
         };
 
-        (
+        Ok((
             auth_engine,
             epoch_engine,
             policy_engine,
@@ -257,7 +259,7 @@ mod tests {
             signing_key,
             auth_id,
             epoch_id,
-        )
+        ))
     }
 
     fn create_valid_transition(
@@ -282,7 +284,7 @@ mod tests {
     #[test]
     fn test_valid_transition() -> Result<(), Box<dyn std::error::Error>> {
         let (auth_engine, epoch_engine, policy_engine, policy, signing_key, auth_id, epoch_id) =
-            setup_environment();
+            setup_environment()?;
 
         let raw_payload = b"move_forward";
         let transition = create_valid_transition(auth_id, epoch_id, 1500, raw_payload);
@@ -312,12 +314,13 @@ mod tests {
         let result = engine.verify(&ctx);
 
         assert_eq!(result, VerificationResult::Valid);
+        Ok(())
     }
 
     #[test]
     fn test_invalid_signature() -> Result<(), Box<dyn std::error::Error>> {
         let (auth_engine, epoch_engine, policy_engine, policy, signing_key, auth_id, epoch_id) =
-            setup_environment();
+            setup_environment()?;
 
         let raw_payload = b"move_forward";
         let transition = create_valid_transition(auth_id, epoch_id, 1500, raw_payload);
@@ -355,12 +358,13 @@ mod tests {
             result,
             VerificationResult::Invalid("Cryptographic signature verification failed")
         );
+        Ok(())
     }
 
     #[test]
     fn test_stale_epoch() -> Result<(), Box<dyn std::error::Error>> {
         let (auth_engine, epoch_engine, policy_engine, policy, signing_key, auth_id, epoch_id) =
-            setup_environment();
+            setup_environment()?;
 
         let raw_payload = b"move_forward";
         // Epoch expires at 2000. 2500 is out of bounds.
@@ -395,12 +399,13 @@ mod tests {
                 "Epoch is inactive, expired, or transition timestamp is out of bounds"
             )
         );
+        Ok(())
     }
 
     #[test]
     fn test_unknown_authority() -> Result<(), Box<dyn std::error::Error>> {
         let (auth_engine, epoch_engine, policy_engine, policy, _, _, epoch_id) =
-            setup_environment();
+            setup_environment()?;
 
         let (unregistered_key, unregistered_id) = generate_keypair();
 
@@ -434,12 +439,13 @@ mod tests {
             result,
             VerificationResult::Unknown("Authority not registered")
         );
+        Ok(())
     }
 
     #[test]
     fn test_incompatible_policy() -> Result<(), Box<dyn std::error::Error>> {
         let (auth_engine, epoch_engine, policy_engine, policy, signing_key, auth_id, epoch_id) =
-            setup_environment();
+            setup_environment()?;
 
         let raw_payload = b"move_forward";
         let transition = create_valid_transition(auth_id, epoch_id, 1500, raw_payload);
@@ -471,12 +477,13 @@ mod tests {
             result,
             VerificationResult::Incompatible("Required evidence missing")
         );
+        Ok(())
     }
 
     #[test]
     fn test_attack_modified_state() -> Result<(), Box<dyn std::error::Error>> {
         let (auth_engine, epoch_engine, policy_engine, policy, signing_key, auth_id, epoch_id) =
-            setup_environment();
+            setup_environment()?;
 
         let raw_payload = b"move_forward";
         let transition = create_valid_transition(auth_id, epoch_id, 1500, raw_payload);
@@ -510,12 +517,13 @@ mod tests {
                 "Transition integrity check failed (payload mismatch or output state mismatch)"
             )
         );
+        Ok(())
     }
 
     #[test]
     fn test_attack_reordered_transition() -> Result<(), Box<dyn std::error::Error>> {
         let (auth_engine, epoch_engine, policy_engine, policy, signing_key, auth_id, epoch_id) =
-            setup_environment();
+            setup_environment()?;
 
         let raw_payload = b"move_forward";
         let transition = create_valid_transition(auth_id, epoch_id, 1500, raw_payload);
@@ -549,12 +557,13 @@ mod tests {
                 "Transition input state does not match expected active state"
             )
         );
+        Ok(())
     }
 
     #[test]
     fn test_attack_duplicated_transition() -> Result<(), Box<dyn std::error::Error>> {
         let (auth_engine, epoch_engine, policy_engine, policy, signing_key, auth_id, epoch_id) =
-            setup_environment();
+            setup_environment()?;
 
         let raw_payload = b"move_forward";
         let transition = create_valid_transition(auth_id, epoch_id, 1500, raw_payload);
@@ -589,12 +598,13 @@ mod tests {
             result,
             VerificationResult::Duplicate("Transition has already been applied")
         );
+        Ok(())
     }
 
     #[test]
     fn test_attack_epoch_substitution() -> Result<(), Box<dyn std::error::Error>> {
         let (auth_engine, epoch_engine, policy_engine, policy, signing_key, auth_id, _) =
-            setup_environment();
+            setup_environment()?;
 
         let raw_payload = b"move_forward";
         // USE AN INVALID EPOCH
@@ -630,12 +640,13 @@ mod tests {
                 "Epoch is inactive, expired, or transition timestamp is out of bounds"
             )
         );
+        Ok(())
     }
 
     #[test]
     fn test_attack_malformed_payload() -> Result<(), Box<dyn std::error::Error>> {
         let (auth_engine, epoch_engine, policy_engine, policy, signing_key, auth_id, epoch_id) =
-            setup_environment();
+            setup_environment()?;
 
         let raw_payload = b"move_forward";
         let transition = create_valid_transition(auth_id, epoch_id, 1500, raw_payload);
@@ -671,5 +682,6 @@ mod tests {
                 "Transition integrity check failed (payload mismatch or output state mismatch)"
             )
         );
+        Ok(())
     }
 }

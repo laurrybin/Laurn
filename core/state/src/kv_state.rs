@@ -167,3 +167,107 @@ impl DeterministicStateDomain for KeyValueDomainState {
         Ok(buffer)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use delta::{DeltaOp, StateDelta};
+
+    #[test]
+    fn test_empty_delta() {
+        let mut state = KeyValueDomainState::default();
+        let delta = StateDelta::new(vec![]);
+
+        assert_eq!(state.apply_delta(&delta), Ok(()));
+    }
+
+    #[test]
+    fn test_multi_operation_delta() {
+        let mut state = KeyValueDomainState::default();
+
+        let delta = StateDelta::new(vec![
+            DeltaOp::AddEntity {
+                entity_id: 1,
+                data: vec![],
+            },
+            DeltaOp::AddEntity {
+                entity_id: 2,
+                data: vec![],
+            },
+            DeltaOp::UpdateField {
+                entity_id: 1,
+                component_id: 10,
+                field_id: 20,
+                data: vec![0xFF],
+            },
+            DeltaOp::RemoveEntity { entity_id: 2 },
+        ]);
+
+        assert_eq!(state.apply_delta(&delta), Ok(()));
+        assert!(state.entities.contains(&1));
+        assert!(!state.entities.contains(&2));
+        assert_eq!(state.fields.get(&(1, 10, 20)), Some(&vec![0xFF]));
+    }
+
+    #[test]
+    fn test_malformed_delta() {
+        let mut state = KeyValueDomainState::default();
+        state.entities.insert(1);
+
+        let delta = StateDelta::new(vec![DeltaOp::UpdateField {
+            entity_id: 1,
+            component_id: 10,
+            field_id: 20,
+            data: vec![],
+        }]);
+
+        assert_eq!(
+            state.apply_delta(&delta),
+            Err(DeltaError::MalformedData("Field data is empty"))
+        );
+    }
+
+    #[test]
+    fn test_conflicting_delta() {
+        let mut state = KeyValueDomainState::default();
+        state.entities.insert(1);
+
+        let delta = StateDelta::new(vec![
+            DeltaOp::RemoveEntity { entity_id: 1 },
+            DeltaOp::UpdateField {
+                entity_id: 1,
+                component_id: 10,
+                field_id: 20,
+                data: vec![0xAA],
+            },
+        ]);
+
+        assert_eq!(
+            state.apply_delta(&delta),
+            Err(DeltaError::ConflictingDelta("Updating removed entity"))
+        );
+    }
+
+    #[test]
+    fn test_deterministic_reconstruction() {
+        let mut state1 = KeyValueDomainState::default();
+        let mut state2 = KeyValueDomainState::default();
+
+        let delta = StateDelta::new(vec![
+            DeltaOp::AddEntity {
+                entity_id: 100,
+                data: vec![],
+            },
+            DeltaOp::UpdateField {
+                entity_id: 100,
+                component_id: 1,
+                field_id: 2,
+                data: vec![1, 2, 3],
+            },
+        ]);
+
+        assert_eq!(state1.apply_delta(&delta), Ok(()));
+        assert_eq!(state2.apply_delta(&delta), Ok(()));
+        assert_eq!(state1, state2);
+    }
+}

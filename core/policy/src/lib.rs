@@ -191,6 +191,7 @@ mod tests {
         let decision = engine.evaluate(&policy, &ctx);
 
         assert_eq!(decision, PolicyDecision::Accepted);
+        Ok(())
     }
 
     #[test]
@@ -213,6 +214,7 @@ mod tests {
             decision,
             PolicyDecision::Rejected(PolicyRejectionReason::ProtocolVersionMismatch)
         );
+        Ok(())
     }
 
     #[test]
@@ -235,6 +237,7 @@ mod tests {
             decision,
             PolicyDecision::Rejected(PolicyRejectionReason::EvidenceMissing)
         );
+        Ok(())
     }
 
     #[test]
@@ -273,6 +276,7 @@ mod tests {
             decision2,
             PolicyDecision::Rejected(PolicyRejectionReason::StateFreshnessViolation)
         );
+        Ok(())
     }
 
     #[test]
@@ -296,6 +300,7 @@ mod tests {
             decision,
             PolicyDecision::Rejected(PolicyRejectionReason::TransitionClassNotAllowed)
         );
+        Ok(())
     }
 
     #[test]
@@ -318,5 +323,6 @@ mod tests {
             decision,
             PolicyDecision::Rejected(PolicyRejectionReason::InsufficientAuthorityCapability)
         );
+        Ok(())
     }
 }

@@ -105,6 +105,7 @@ mod tests {
 
         // Identical semantic state must produce identical byte arrays.
         assert_eq!(state1.canonicalize()?, state2.canonicalize()?);
+        Ok(())
     }
 
     #[test]
@@ -121,5 +122,6 @@ mod tests {
         assert_eq!(bytes[1], 0x03);
         assert_eq!(bytes[2], 0x02);
         assert_eq!(bytes[3], 0x01);
+        Ok(())
     }
 }

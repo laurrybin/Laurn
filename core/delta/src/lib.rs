@@ -107,108 +107,26 @@ pub trait DeltaApplicable {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use state::KeyValueDomainState;
 
     #[test]
-    fn test_empty_delta() -> Result<(), Box<dyn std::error::Error>> {
-        let mut state = KeyValueDomainState::default();
+    fn test_empty_delta_is_within_bounds() {
         let delta = StateDelta::new(vec![]);
-        assert_eq!(state.apply_delta(&delta), Ok(()));
+        assert!(delta.validate_bounds());
     }
 
     #[test]
-    fn test_large_delta() -> Result<(), Box<dyn std::error::Error>> {
-        let mut state = KeyValueDomainState::default();
-        let ops = vec![
-            DeltaOp::AddEntity {
-                entity_id: 1,
-                data: vec![],
-            },
-            DeltaOp::AddEntity {
-                entity_id: 2,
-                data: vec![],
-            },
-            DeltaOp::UpdateField {
-                entity_id: 1,
-                component_id: 10,
-                field_id: 20,
-                data: vec![0xFF],
-            },
-            DeltaOp::RemoveEntity { entity_id: 2 },
-        ];
-        let delta = StateDelta::new(ops);
-        assert_eq!(state.apply_delta(&delta), Ok(()));
+    fn test_delta_at_maximum_bound_is_valid() {
+        let op = DeltaOp::RemoveEntity { entity_id: 1 };
+        let delta = StateDelta::new(vec![op; MAX_DELTA_OPS]);
 
-        assert!(state.entities.contains(&1));
-        assert!(!state.entities.contains(&2));
-        assert_eq!(state.fields.get(&(1, 10, 20))?, &vec![0xFF]);
+        assert!(delta.validate_bounds());
     }
 
     #[test]
-    fn test_malformed_delta() -> Result<(), Box<dyn std::error::Error>> {
-        let mut state = KeyValueDomainState::default();
-        state.entities.insert(1); // Pre-existing
+    fn test_delta_above_maximum_bound_is_rejected() {
+        let op = DeltaOp::RemoveEntity { entity_id: 1 };
+        let delta = StateDelta::new(vec![op; MAX_DELTA_OPS + 1]);
 
-        // Empty data for a field update
-        let ops = vec![DeltaOp::UpdateField {
-            entity_id: 1,
-            component_id: 10,
-            field_id: 20,
-            data: vec![],
-        }];
-        let delta = StateDelta::new(ops);
-        assert_eq!(
-            state.apply_delta(&delta),
-            Err(DeltaError::MalformedData("Field data is empty"))
-        );
-    }
-
-    #[test]
-    fn test_conflicting_delta() -> Result<(), Box<dyn std::error::Error>> {
-        let mut state = KeyValueDomainState::default();
-        state.entities.insert(1);
-
-        // Remove and then update the same entity in one delta
-        let ops = vec![
-            DeltaOp::RemoveEntity { entity_id: 1 },
-            DeltaOp::UpdateField {
-                entity_id: 1,
-                component_id: 10,
-                field_id: 20,
-                data: vec![0xAA],
-            },
-        ];
-        let delta = StateDelta::new(ops);
-        assert_eq!(
-            state.apply_delta(&delta),
-            Err(DeltaError::ConflictingDelta("Updating removed entity"))
-        );
-    }
-
-    #[test]
-    fn test_deterministic_reconstruction() -> Result<(), Box<dyn std::error::Error>> {
-        let mut state1 = KeyValueDomainState::default();
-        let mut state2 = KeyValueDomainState::default();
-
-        let ops = vec![
-            DeltaOp::AddEntity {
-                entity_id: 100,
-                data: vec![],
-            },
-            DeltaOp::UpdateField {
-                entity_id: 100,
-                component_id: 1,
-                field_id: 2,
-                data: vec![1, 2, 3],
-            },
-        ];
-        let delta = StateDelta::new(ops);
-
-        // Apply same delta to two identical initial states
-        state1.apply_delta(&delta)?;
-        state2.apply_delta(&delta)?;
-
-        // They must result in the exactly equivalent state
-        assert_eq!(state1, state2);
+        assert!(!delta.validate_bounds());
     }
 }

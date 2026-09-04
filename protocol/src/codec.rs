@@ -36,6 +36,22 @@ pub enum CodecError {
     SerializationFailed,
 }
 
+impl std::fmt::Display for CodecError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::IncompleteMessage => write!(f, "incomplete protocol message"),
+            Self::InvalidMagicBytes => write!(f, "invalid protocol magic bytes"),
+            Self::MessageTooLarge(size) => {
+                write!(f, "protocol message exceeds maximum size: {size} bytes")
+            }
+            Self::MalformedPayload => write!(f, "malformed protocol payload"),
+            Self::SerializationFailed => write!(f, "protocol serialization failed"),
+        }
+    }
+}
+
+impl std::error::Error for CodecError {}
+
 pub struct LaurnCodec;
 
 impl LaurnCodec {
@@ -126,6 +142,7 @@ mod tests {
 
         assert_eq!(msg, decoded);
         assert_eq!(consumed, encoded.len());
+        Ok(())
     }
 
     #[test]
@@ -140,6 +157,7 @@ mod tests {
         // Truncate payload
         let result2 = LaurnCodec::decode(&encoded[0..encoded.len() - 1]);
         assert_eq!(result2, Err(CodecError::IncompleteMessage));
+        Ok(())
     }
 
     #[test]
@@ -152,6 +170,7 @@ mod tests {
 
         let result = LaurnCodec::decode(&encoded);
         assert_eq!(result, Err(CodecError::InvalidMagicBytes));
+        Ok(())
     }
 
     #[test]
@@ -167,6 +186,7 @@ mod tests {
         // It should reject immediately without trying to read 20 MB or wait for it
         let result = LaurnCodec::decode(&frame);
         assert_eq!(result, Err(CodecError::MessageTooLarge(massive_len)));
+        Ok(())
     }
 
     #[test]
@@ -184,5 +204,6 @@ mod tests {
 
         let result = LaurnCodec::decode(&encoded);
         assert_eq!(result, Err(CodecError::MalformedPayload));
+        Ok(())
     }
 }

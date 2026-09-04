@@ -180,12 +180,34 @@ mod tests {
         engine.register_epoch(e2.clone())?;
 
         engine.activate_epoch(e1.id)?;
-        assert_eq!(engine.epochs.get(&e1.id.0)?.status, EpochStatus::Active);
+        assert_eq!(
+            engine
+                .epochs
+                .get(&e1.id.0)
+                .ok_or("missing epoch e1")?
+                .status,
+            EpochStatus::Active
+        );
 
         // Activate E2, should close E1
         engine.activate_epoch(e2.id)?;
-        assert_eq!(engine.epochs.get(&e1.id.0)?.status, EpochStatus::Closed);
-        assert_eq!(engine.epochs.get(&e2.id.0)?.status, EpochStatus::Active);
+        assert_eq!(
+            engine
+                .epochs
+                .get(&e1.id.0)
+                .ok_or("missing epoch e1")?
+                .status,
+            EpochStatus::Closed
+        );
+        assert_eq!(
+            engine
+                .epochs
+                .get(&e2.id.0)
+                .ok_or("missing epoch e2")?
+                .status,
+            EpochStatus::Active
+        );
+        Ok(())
     }
 
     #[test]
@@ -202,6 +224,7 @@ mod tests {
         assert!(!engine.validate_transition_binding(&e1.id, 2500));
         // 1500 is within window (valid)
         assert!(engine.validate_transition_binding(&e1.id, 1500));
+        Ok(())
     }
 
     #[test]
@@ -214,6 +237,7 @@ mod tests {
 
         // Transition timestamp is 999, which is before the epoch started (future epoch from transition perspective)
         assert!(!engine.validate_transition_binding(&e1.id, 999));
+        Ok(())
     }
 
     #[test]
@@ -231,5 +255,6 @@ mod tests {
 
         // E1 is now Closed
         assert!(!engine.validate_transition_binding(&e1.id, 1500));
+        Ok(())
     }
 }

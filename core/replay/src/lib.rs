@@ -139,12 +139,13 @@ mod tests {
         assert_eq!(reader.header.initial_state, initial_state);
         assert_eq!(reader.total_frames, 1);
 
-        let frame = reader.next_frame()??;
+        let frame = reader.next_frame()?.ok_or("missing replay frame")?;
         assert_eq!(frame.raw_payload, raw_payload);
         assert_eq!(frame.expected_output_state, output_state);
 
         let none = reader.next_frame()?;
         assert!(none.is_none());
+        Ok(())
     }
 
     #[test]
@@ -162,5 +163,6 @@ mod tests {
             reader_result.err().ok_or("err")?.to_string(),
             "Invalid replay magic bytes"
         );
+        Ok(())
     }
 }

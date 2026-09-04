@@ -9,8 +9,5 @@ license.workspace = true
 [dependencies]
 borsh = { workspace = true }
 
-[dev-dependencies]
-state = { path = "../state" }
-
 [lints]
 workspace = true
