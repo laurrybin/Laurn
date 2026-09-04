@@ -20,7 +20,7 @@ use transition::Transition;
 
 pub mod replay;
 
-/// Maximum allowed size for a transition payload (4MB) to prevent memory DoS attacks.
+/// Maximum allowed size for a transition payload (4MB) to prevent memory `DoS` attacks.
 pub const MAX_TRANSITION_PAYLOAD_SIZE: usize = 4 * 1024 * 1024;
 
 /// The definitive result of evaluating a state transition through the Verification Engine.

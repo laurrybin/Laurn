@@ -20,7 +20,7 @@ use transition::TransitionId;
 pub const DEFAULT_MAX_REPLAY_HISTORY: usize = 4096;
 
 /// A bounded cache for tracking seen transitions to prevent replay attacks.
-/// It uses a VecDeque for O(1) eviction of oldest elements, and a HashSet for O(1) membership checks.
+/// It uses a `VecDeque` for O(1) eviction of oldest elements, and a `HashSet` for O(1) membership checks.
 #[derive(Debug, Clone)]
 pub struct ReplayBuffer {
     capacity: usize,
