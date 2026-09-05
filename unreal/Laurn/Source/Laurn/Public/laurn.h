@@ -281,6 +281,13 @@ LaurnResult laurn_replay_analyze_divergence(
     LaurnDivergenceReport* out_report
 );
 
+uint32_t laurn_get_version(void);
+
+LaurnResult laurn_get_build_info(
+    char* buffer,
+    size_t buffer_len
+);
+
 #ifdef __cplusplus
 }
 #endif
