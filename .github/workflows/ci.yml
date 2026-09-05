@@ -22,10 +22,10 @@ jobs:
           components: rustfmt, clippy
 
       - name: Check Formatting
-        run: cargo fmt -- --check
+        run: cargo fmt --all -- --check
 
       - name: Lint with Clippy
-        run: cargo clippy --workspace -- -D warnings
+        run: cargo clippy --workspace --all-targets --all-features --exclude laurn-fuzz -- -D warnings
 
       - name: Run Placeholder Audit
         run: |
@@ -83,7 +83,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
 
       - name: Build Workspace
-        run: cargo build --workspace
+        run: cargo build --workspace --exclude laurn-fuzz
 
       - name: Run Tests (Cross-Platform Validation)
-        run: cargo test --workspace
+        run: cargo test --workspace --exclude laurn-fuzz
