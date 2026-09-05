@@ -15,7 +15,7 @@
 use crate::LaurnMessage;
 
 /// The Magic Bytes "LRN1" in ASCII, used to filter out noise on the wire.
-pub const MAGIC_BYTES: [u8; 4] = [b'L', b'R', b'N', b'1'];
+pub const MAGIC_BYTES: [u8; 4] = *b"LRN1";
 
 /// Strict allocation limit for any single protocol message.
 /// 16 MB is generous for simulation frames, but small enough to prevent OOM DOS attacks.
