@@ -81,20 +81,19 @@ pub struct Transition {
 }
 
 impl Transition {
-    /// Validates the transition by proving that the provided raw payload matches the `payload_commitment`
-    /// and that executing the payload on `input_state` legitimately yields `output_state`.
+    /// Validates that the raw payload matches `payload_commitment` and that the
+    /// host-supplied generated output commitment matches `output_state`.
     ///
-    /// In Phase 05, this simply validates the cryptographic integrity of the payload commitment
-    /// and the matching generated output state. Future phases will integrate the WASM execution engine here.
+    /// This method does not execute the payload or derive application state.
     #[must_use]
     pub fn validate(&self, raw_payload: &[u8], generated_output_state: StateCommitment) -> bool {
-        // 1. Verify the payload matches the commitment
+        // Verify the payload commitment.
         let computed_payload_commitment = TransitionCommitment::compute(raw_payload);
         if self.payload_commitment != computed_payload_commitment {
             return false;
         }
 
-        // 2. Verify the output state matches what the engine actually produced
+        // Verify the host-generated output commitment.
         if self.output_state != generated_output_state {
             return false;
         }
