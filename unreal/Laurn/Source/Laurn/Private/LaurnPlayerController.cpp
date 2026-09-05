@@ -18,10 +18,9 @@
 
 bool ALaurnPlayerController::ServerSubmitTransition_Validate(const TArray<uint8>& TransitionPayload)
 {
-	// Basic size validation before passing to LAURN engine
 	if (TransitionPayload.Num() == 0 || TransitionPayload.Num() > 65536)
 	{
-		return false; // Automatically drops connection if validation fails
+		return false;
 	}
 	return true;
 }
@@ -42,9 +41,7 @@ void ALaurnPlayerController::ServerSubmitTransition_Implementation(const TArray<
 				}
 				else
 				{
-					// Reject transition. The state remains unmodified.
-					// Depending on severity, we might disconnect the player.
-					UE_LOG(LogTemp, Warning, TEXT("LAURN Verification FAILED. Dropping transition."));
+					UE_LOG(LogTemp, Warning, TEXT("LAURN verification failed. Dropping transition."));
 				}
 			}
 		}

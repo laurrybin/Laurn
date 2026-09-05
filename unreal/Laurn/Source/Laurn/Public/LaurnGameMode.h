@@ -19,8 +19,7 @@
 #include "LaurnGameMode.generated.h"
 
 /**
- * ALaurnGameMode forces the use of ALaurnPlayerController for all connections,
- * ensuring all client input is strictly routed through the LAURN transition verifier.
+ * ALaurnGameMode configures ALaurnPlayerController as its player controller class.
  */
 UCLASS()
 class LAURN_API ALaurnGameMode : public AGameModeBase
