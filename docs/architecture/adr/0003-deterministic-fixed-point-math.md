@@ -1,15 +1,29 @@
-# ADR 0003: Deterministic Fixed-Point Math
+# ADR 0003: Deterministic Numeric Representations
 
 **Date:** 2026-08-25  
-**Status:** Accepted  
+**Status:** Accepted
 
 ## Context
-Floating-point math (`f32`, `f64`) behaves differently across CPU architectures (x86 vs ARM), compiler optimization levels (e.g., `-ffast-math`), and operating systems. For LAURN's state commitments to match identically across all verifying nodes, the simulation state cannot drift by even a single bit.
+
+State commitments depend on stable byte representations. Native floating-point values can introduce problematic representations such as NaN, infinity, and negative zero, while host simulations may also differ in how floating-point operations are evaluated.
+
+LAURN therefore needs explicit numeric representations at the verified-state boundary.
 
 ## Decision
-Floating-point math is strictly forbidden within the LAURN core state and transition evaluation logic. We will implement and use a custom fixed-point mathematics engine (`core/math`).
+
+Use deterministic numeric representations in `core/math`:
+
+- `CanonicalF32` and `CanonicalF64` reject non-finite values and normalize negative zero before serialization.
+- fixed-point vector, quaternion, and transform types use `I48F16`.
+- host integrations quantize or canonicalize engine-native values before including them in canonical state.
+
+The choice of representation is explicit rather than treating unrestricted host floating-point state as canonical by default.
 
 ## Consequences
-- **Positive:** Guarantees bit-for-bit determinism across all platforms (Windows, Linux, Consoles, Mobile).
-- **Negative:** Fixed-point math incurs a slight performance overhead compared to hardware-accelerated floating-point operations.
-- **Negative:** Game developers integrating LAURN must convert their engine's native floating-point representations (e.g., Unreal's `FVector`) to LAURN's fixed-point structures at the FFI boundary, which requires explicit quantization logic.
+
+- **Positive:** Canonical wrappers remove NaN, infinity, and negative-zero ambiguity from serialized floating-point values.
+- **Positive:** Fixed-point vector and transform types provide a stable integer-backed representation after quantization.
+- **Positive:** The verified-state-boundary makes numeric conversion rules visible to host integrations.
+- **Negative:** Quantization introduces finite precision and requires applications to choose appropriate scales and ranges.
+- **Negative:** Host integrations must convert engine-native numeric types before commitment.
+- **Negative:** These primitives do not by themselves prove deterministic behavior of an entire simulation across every CPU, compiler, operating system, or engine configuration.
