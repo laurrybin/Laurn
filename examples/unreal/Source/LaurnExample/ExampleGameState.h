@@ -23,14 +23,11 @@ class ULaurnStateComponent;
 UCLASS()
 class LAURNEXAMPLE_API AExampleGameState : public AGameStateBase
 {
-	GENERATED_BODY()
-	
+    GENERATED_BODY()
+
 public:
-	AExampleGameState();
+    AExampleGameState();
 
-protected:
-	virtual void BeginPlay() override;
-
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Laurn")
-	ULaurnStateComponent* LaurnStateComponent;
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "LAURN")
+    ULaurnStateComponent* LaurnStateComponent;
 };

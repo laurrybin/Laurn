@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #pragma once
+
 #include "CoreMinimal.h"
 #include "GameFramework/HUD.h"
 #include "ExampleHUD.generated.h"
@@ -21,13 +22,14 @@ UCLASS()
 class LAURNEXAMPLE_API AExampleHUD : public AHUD
 {
     GENERATED_BODY()
+
 public:
     AExampleHUD();
     virtual void DrawHUD() override;
 
-    void ShowVerificationFailed();
-    void ShowVerificationSuccess();
-    
+    void ShowExpectedRejection();
+    void ShowUnexpectedAcceptance();
+
 private:
     FString LastVerificationStatus;
     FColor VerificationColor;

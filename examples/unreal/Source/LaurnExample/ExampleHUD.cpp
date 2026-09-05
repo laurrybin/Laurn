@@ -13,14 +13,16 @@
 // limitations under the License.
 
 #include "ExampleHUD.h"
-#include "Engine/Canvas.h"
 #include "CanvasItem.h"
 #include "LaurnSubsystem.h"
+#include "Engine/Canvas.h"
 #include "Engine/Engine.h"
+#include "Engine/GameInstance.h"
+#include "Engine/World.h"
 
 AExampleHUD::AExampleHUD()
 {
-    LastVerificationStatus = TEXT("Waiting for actions...");
+    LastVerificationStatus = TEXT("Ready.");
     VerificationColor = FColor::White;
     StatusTimer = 0.0f;
 }
@@ -28,65 +30,96 @@ AExampleHUD::AExampleHUD()
 void AExampleHUD::DrawHUD()
 {
     Super::DrawHUD();
-    if (!Canvas || !GEngine || !GEngine->GetSmallFont()) return;
-    
+
+    UWorld* World = GetWorld();
+    if (Canvas == nullptr || GEngine == nullptr || GEngine->GetSmallFont() == nullptr || World == nullptr)
+    {
+        return;
+    }
+
     float YOffset = 50.0f;
-    
-    // Draw Title
-    FCanvasTextItem TitleItem(FVector2D(50.0f, YOffset), FText::FromString(TEXT("LAURN TECHNICAL INTEGRATION SHOWCASE")), GEngine->GetSmallFont(), FColor::Cyan);
+
+    FCanvasTextItem TitleItem(
+        FVector2D(50.0f, YOffset),
+        FText::FromString(TEXT("LAURN VERIFICATION DIAGNOSTIC")),
+        GEngine->GetSmallFont(),
+        FColor::Cyan
+    );
     TitleItem.Scale = FVector2D(2.0f, 2.0f);
     Canvas->DrawItem(TitleItem);
     YOffset += 50.0f;
-    
-    // Draw Instructions
-    FCanvasTextItem Inst1(FVector2D(50.0f, YOffset), FText::FromString(TEXT("Press 'C' to trigger Diagnostic Teleport (Instantaneous Translation)")), GEngine->GetSmallFont(), FColor::White);
-    Canvas->DrawItem(Inst1);
+
+    FCanvasTextItem DiagnosticInstruction(
+        FVector2D(50.0f, YOffset),
+        FText::FromString(TEXT("C: run rejection and rollback diagnostic")),
+        GEngine->GetSmallFont(),
+        FColor::White
+    );
+    Canvas->DrawItem(DiagnosticInstruction);
     YOffset += 20.0f;
-    FCanvasTextItem Inst2(FVector2D(50.0f, YOffset), FText::FromString(TEXT("Press 'R' to Start Recording, 'S' to Stop, 'P' to Playback")), GEngine->GetSmallFont(), FColor::White);
-    Canvas->DrawItem(Inst2);
+
+    FCanvasTextItem ReplayInstruction(
+        FVector2D(50.0f, YOffset),
+        FText::FromString(TEXT("R: start recording  S: stop recording  P: load replay")),
+        GEngine->GetSmallFont(),
+        FColor::White
+    );
+    Canvas->DrawItem(ReplayInstruction);
     YOffset += 40.0f;
-    
-    // Draw Hash
-    FString HashText = TEXT("State Hash: UNKNOWN");
-    if (ULaurnSubsystem* LaurnSubsystem = GetWorld()->GetGameInstance()->GetSubsystem<ULaurnSubsystem>())
+
+    FString CommitmentText = TEXT("Tracked State Commitment: unavailable");
+    if (UGameInstance* GameInstance = World->GetGameInstance())
     {
-        TArray<uint8> HashData;
-        if (LaurnSubsystem->ComputeGlobalStateCommitment(HashData) && HashData.Num() > 0)
+        if (ULaurnSubsystem* LaurnSubsystem = GameInstance->GetSubsystem<ULaurnSubsystem>())
         {
-            FString HexHash;
-            for (uint8 Byte : HashData)
+            TArray<uint8> Commitment;
+            if (LaurnSubsystem->ComputeGlobalStateCommitment(Commitment) && Commitment.Num() == 32)
             {
-                HexHash += FString::Printf(TEXT("%02x"), Byte);
+                FString HexCommitment;
+                for (uint8 Byte : Commitment)
+                {
+                    HexCommitment += FString::Printf(TEXT("%02x"), Byte);
+                }
+                CommitmentText = FString::Printf(TEXT("Tracked State Commitment: %s"), *HexCommitment);
             }
-            HashText = FString::Printf(TEXT("State Hash: %s"), *HexHash);
         }
     }
-    
-    FCanvasTextItem HashItem(FVector2D(50.0f, YOffset), FText::FromString(HashText), GEngine->GetSmallFont(), FColor::Yellow);
-    HashItem.Scale = FVector2D(1.5f, 1.5f);
-    Canvas->DrawItem(HashItem);
+
+    FCanvasTextItem CommitmentItem(
+        FVector2D(50.0f, YOffset),
+        FText::FromString(CommitmentText),
+        GEngine->GetSmallFont(),
+        FColor::Yellow
+    );
+    CommitmentItem.Scale = FVector2D(1.5f, 1.5f);
+    Canvas->DrawItem(CommitmentItem);
     YOffset += 50.0f;
-    
-    // Draw Status
+
     if (StatusTimer > 0.0f)
     {
-        FCanvasTextItem StatusItem(FVector2D(50.0f, YOffset), FText::FromString(LastVerificationStatus), GEngine->GetSmallFont(), VerificationColor);
+        FCanvasTextItem StatusItem(
+            FVector2D(50.0f, YOffset),
+            FText::FromString(LastVerificationStatus),
+            GEngine->GetSmallFont(),
+            VerificationColor
+        );
         StatusItem.Scale = FVector2D(1.5f, 1.5f);
         Canvas->DrawItem(StatusItem);
-        StatusTimer -= GetWorld()->GetDeltaSeconds();
+        StatusTimer -= World->GetDeltaSeconds();
     }
 }
 
-void AExampleHUD::ShowVerificationFailed()
+void AExampleHUD::ShowExpectedRejection()
 {
-    LastVerificationStatus = TEXT("[LAURN VERIFICATION FAILED: Validation Bounds Exceeded] - Rolling Back!");
-    VerificationColor = FColor::Red;
+    LastVerificationStatus =
+        TEXT("Diagnostic message rejected; speculative movement rolled back by host code.");
+    VerificationColor = FColor::Green;
     StatusTimer = 3.0f;
 }
 
-void AExampleHUD::ShowVerificationSuccess()
+void AExampleHUD::ShowUnexpectedAcceptance()
 {
-    LastVerificationStatus = TEXT("[LAURN VERIFICATION SUCCESS: Valid Transition]");
-    VerificationColor = FColor::Green;
-    StatusTimer = 1.0f;
+    LastVerificationStatus = TEXT("Unexpected acceptance of malformed diagnostic message.");
+    VerificationColor = FColor::Red;
+    StatusTimer = 3.0f;
 }

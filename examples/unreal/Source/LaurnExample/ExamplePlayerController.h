@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #pragma once
+
 #include "CoreMinimal.h"
 #include "GameFramework/PlayerController.h"
 #include "ExamplePlayerController.generated.h"
@@ -21,18 +22,15 @@ UCLASS()
 class LAURNEXAMPLE_API AExamplePlayerController : public APlayerController
 {
     GENERATED_BODY()
+
 public:
     virtual void SetupInputComponent() override;
-    
+
 protected:
-    UFUNCTION(BlueprintCallable, Category = "Laurn|Diagnostic")
-    void TriggerDiagnosticTeleport();
+    UFUNCTION(BlueprintCallable, Category = "LAURN|Diagnostic")
+    void TriggerRejectionDiagnostic();
+
     void StartRecording();
     void StopRecording();
     void PlaybackReplay();
-    
-    virtual void Tick(float DeltaSeconds) override;
-    
-private:
-    FVector LastCanonicalLocation;
 };
