@@ -22,9 +22,7 @@
 extern "C" {
 #endif
 
-// ----------------------------------------------------------------------------
 // Error Codes
-// ----------------------------------------------------------------------------
 
 typedef enum LaurnResult {
     LAURN_SUCCESS = 0,
@@ -42,31 +40,23 @@ typedef enum LaurnResult {
     LAURN_DIVERGENCE_DETECTED = 12,
 } LaurnResult;
 
-// ----------------------------------------------------------------------------
 // Opaque Handles
-// ----------------------------------------------------------------------------
 
 typedef struct LaurnAuthorityEngineHandle LaurnAuthorityEngineHandle;
 typedef struct LaurnEpochEngineHandle LaurnEpochEngineHandle;
 typedef struct LaurnPolicyEngineHandle LaurnPolicyEngineHandle;
 typedef struct LaurnVerificationEngineHandle LaurnVerificationEngineHandle;
 typedef struct LaurnTransitionHandle LaurnTransitionHandle;
-typedef struct LaurnDeltaHandle LaurnDeltaHandle;
 typedef struct LaurnMessageHandle LaurnMessageHandle;
-typedef struct LaurnCanonicalStateHandle LaurnCanonicalStateHandle;
 typedef struct LaurnPolicyHandle LaurnPolicyHandle;
 
-// ----------------------------------------------------------------------------
 // Authority Engine Operations
-// ----------------------------------------------------------------------------
 
 LaurnResult laurn_authority_engine_create(LaurnAuthorityEngineHandle** out_handle);
 LaurnResult laurn_authority_engine_destroy(LaurnAuthorityEngineHandle* handle);
 LaurnResult laurn_authority_engine_register_diagnostic_authority(LaurnAuthorityEngineHandle* handle);
 
-// ----------------------------------------------------------------------------
 // Epoch Engine Operations
-// ----------------------------------------------------------------------------
 
 LaurnResult laurn_epoch_engine_create(LaurnEpochEngineHandle** out_handle);
 LaurnResult laurn_epoch_engine_destroy(LaurnEpochEngineHandle* handle);
@@ -90,30 +80,22 @@ LaurnResult laurn_epoch_engine_close(
     const uint8_t (*epoch_id)[32]
 );
 
-// ----------------------------------------------------------------------------
 // Policy Engine Operations
-// ----------------------------------------------------------------------------
 
 LaurnResult laurn_policy_engine_create(LaurnPolicyEngineHandle** out_handle);
 LaurnResult laurn_policy_engine_destroy(LaurnPolicyEngineHandle* handle);
 
-// ----------------------------------------------------------------------------
 // Policy Operations
-// ----------------------------------------------------------------------------
 
 LaurnResult laurn_policy_create_default(LaurnPolicyHandle** out_policy);
 LaurnResult laurn_policy_destroy(LaurnPolicyHandle* handle);
 
-// ----------------------------------------------------------------------------
 // Verification Engine Operations
-// ----------------------------------------------------------------------------
 
 LaurnResult laurn_verification_engine_create(LaurnVerificationEngineHandle** out_handle);
 LaurnResult laurn_verification_engine_destroy(LaurnVerificationEngineHandle* handle);
 
-// ----------------------------------------------------------------------------
 // Protocol Decoding
-// ----------------------------------------------------------------------------
 
 LaurnResult laurn_protocol_decode_message(
     const uint8_t* buffer,
@@ -173,9 +155,7 @@ LaurnResult laurn_transition_get_class(
     uint32_t* out_class
 );
 
-// ----------------------------------------------------------------------------
 // State Commitment
-// ----------------------------------------------------------------------------
 
 LaurnResult laurn_transition_get_timestamp_ms(
     const LaurnTransitionHandle* transition,
@@ -190,9 +170,7 @@ LaurnResult laurn_state_commitment_compute(
 
 void laurn_free_bytes(uint8_t* ptr, size_t len);
 
-// ----------------------------------------------------------------------------
 // Verification
-// ----------------------------------------------------------------------------
 
 typedef struct LaurnVerificationParams {
     const LaurnTransitionHandle* transition;
@@ -216,9 +194,7 @@ LaurnResult laurn_verify_transition(
     const LaurnVerificationParams* params
 );
 
-// ----------------------------------------------------------------------------
 // Client Utilities (for Unreal Client to sign payloads)
-// ----------------------------------------------------------------------------
 
 LaurnResult laurn_diagnostic_sign_transition(
     uint64_t transition_id,
@@ -232,9 +208,7 @@ LaurnResult laurn_diagnostic_sign_transition(
     uint8_t (*out_authority_id)[32],
     uint8_t (*out_signature)[64]
 );
-// ----------------------------------------------------------------------------
 // Replay Engine
-// ----------------------------------------------------------------------------
 
 typedef struct LaurnReplayRecorderHandle LaurnReplayRecorderHandle;
 typedef struct LaurnReplayReaderHandle LaurnReplayReaderHandle;

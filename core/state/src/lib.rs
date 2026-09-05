@@ -87,7 +87,7 @@ mod tests {
 
     impl DeterministicStateDomain for ExampleGameState {
         fn canonicalize(&self) -> Result<Vec<u8>, StateSerializationError> {
-            // Borsh guarantees deterministic, padding-free little-endian serialization
+            // Borsh provides deterministic, padding-free little-endian serialization
             borsh::to_vec(self)
                 .map_err(|e| StateSerializationError::SerializationFailed(e.to_string()))
         }

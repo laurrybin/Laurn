@@ -27,10 +27,10 @@ pub const EVIDENCE_DOMAIN_V1: &[u8] = b"LAURN_EVIDENCE_V1";
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, BorshSerialize, BorshDeserialize)]
 pub struct EvidenceId(pub [u8; 32]);
 
-/// Specifies the type of trusted environment that produced the evidence.
+/// Specifies the type of execution environment associated with the evidence.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
 pub enum EvidenceType {
-    /// A trusted backend server generated this evidence.
+    /// A backend server generated this evidence.
     ServerAuthoritative,
     /// An Intel SGX secure enclave generated this evidence.
     IntelSgx,
@@ -38,7 +38,7 @@ pub enum EvidenceType {
     AwsNitro,
 }
 
-/// Represents cryptographic proof that a transition occurred in a trusted execution environment.
+/// Represents signed or attested evidence associated with a transition execution.
 #[derive(Debug, Clone, BorshSerialize, BorshDeserialize)]
 pub struct ExecutionEvidence {
     /// The unique identifier of this evidence.

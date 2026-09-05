@@ -44,7 +44,7 @@ impl std::error::Error for PlatformIntegrityError {}
 
 /// A trait for interacting with hardware-backed integrity mechanisms.
 pub trait PlatformIntegrityProvider {
-    /// Generates cryptographically secure execution evidence using the native platform APIs.
+    /// Generates platform-backed execution evidence using native platform APIs.
     ///
     /// If the platform is unavailable, this must return `Err(PlatformIntegrityError::UnsupportedPlatform)`
     /// and MUST NOT synthetic or simulate the evidence.

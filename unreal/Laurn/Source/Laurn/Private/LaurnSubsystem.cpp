@@ -425,12 +425,12 @@ bool ULaurnSubsystem::TickReplay(TArray<uint8>& OutPayload)
 	return true;
 }
 
-bool ULaurnSubsystem::AnalyzeDivergence(const FString& AuthoritativeReplayPath, const FString& TestReplayPath, FString& OutExplanation)
+bool ULaurnSubsystem::AnalyzeDivergence(const FString& ReferenceReplayPath, const FString& TestReplayPath, FString& OutExplanation)
 {
 	TArray<uint8> AuthBuffer;
-	if (!FFileHelper::LoadFileToArray(AuthBuffer, *AuthoritativeReplayPath))
+	if (!FFileHelper::LoadFileToArray(AuthBuffer, *ReferenceReplayPath))
 	{
-		OutExplanation = TEXT("Failed to load Authoritative Replay.");
+		OutExplanation = TEXT("Failed to load reference replay.");
 		return false;
 	}
 
@@ -444,7 +444,7 @@ bool ULaurnSubsystem::AnalyzeDivergence(const FString& AuthoritativeReplayPath, 
 	LaurnReplayReaderHandle* AuthReader = nullptr;
 	if (laurn_replay_reader_create(AuthBuffer.GetData(), AuthBuffer.Num(), &AuthReader) != LAURN_SUCCESS)
 	{
-		OutExplanation = TEXT("Failed to create Authoritative Replay Reader.");
+		OutExplanation = TEXT("Failed to create reference replay reader.");
 		return false;
 	}
 
@@ -476,7 +476,7 @@ bool ULaurnSubsystem::AnalyzeDivergence(const FString& AuthoritativeReplayPath, 
 			ReasonStr = TEXT("Parent State Mismatch");
 			break;
 		case LAURN_DIVERGENCE_COMMITMENT_MISMATCH:
-			ReasonStr = TEXT("Commitment Mismatch (Nondeterministic Execution)");
+			ReasonStr = TEXT("Commitment Mismatch");
 			break;
 		case LAURN_DIVERGENCE_EPOCH_MISMATCH:
 			ReasonStr = TEXT("Epoch Mismatch");

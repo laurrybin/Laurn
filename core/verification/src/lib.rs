@@ -37,10 +37,10 @@ pub fn transition_signing_bytes(
     Ok(bytes)
 }
 
-/// The definitive result of evaluating a state transition through the Verification Engine.
+/// The result of evaluating a state transition through the Verification Engine.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VerificationResult {
-    /// The transition is perfectly valid and can be applied.
+    /// The transition passed all configured verification checks.
     Valid,
     /// The transition is mathematically or cryptographically invalid (tampered, bad signature, wrong output state).
     Invalid(&'static str),
@@ -50,14 +50,14 @@ pub enum VerificationResult {
     Unknown(&'static str),
     /// The transition is fundamentally incompatible with the active global policy or authority capabilities.
     Incompatible(&'static str),
-    /// The transition was already successfully verified and applied (duplicate/replay).
+    /// The transition was already successfully verified (duplicate/replay).
     Duplicate(&'static str),
     /// The transition was applied against a different state (preventing reordered execution).
     StateMismatch(&'static str),
 }
 
 /// The overarching Verification Engine that orchestrates all underlying domain engines
-/// (Epoch, Authority, Policy, Transition, State) to produce a definitive verification result.
+/// (Epoch, Authority, Policy, Transition, State) to produce a verification result.
 #[derive(Debug, Default)]
 pub struct VerificationEngine;
 

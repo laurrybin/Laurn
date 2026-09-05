@@ -12,13 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use clap::{Parser, Subcommand};
 use std::fs;
 use std::path::PathBuf;
 
+use authority::AuthorityEngine;
 use borsh::BorshDeserialize;
+use clap::{Parser, Subcommand};
+use epoch::EpochEngine;
+use policy::{Policy, PolicyEngine, TransitionClass};
 use protocol::LaurnMessage;
-use replay::{divergence::DivergenceAnalyzer, ReplayReader};
+use replay::divergence::{DivergenceAnalyzer, DivergenceReason};
+use replay::ReplayReader;
+use verification::{VerificationContext, VerificationEngine};
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -53,183 +58,175 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
 
     match &cli.command {
-        Commands::Dump { replay_file } => {
-            let buffer = fs::read(replay_file)?;
-            let mut reader = ReplayReader::new(&buffer)?;
-
-            println!("========================================");
-            println!("LAURN SESSION REPLAY DUMP");
-            println!("========================================");
-            println!("Version: {}", reader.header.version);
-            println!("Total Frames: {}", reader.total_frames);
-            println!(
-                "Initial State: {}",
-                hex::encode(reader.header.initial_state.0)
-            );
-            println!("----------------------------------------");
-
-            while let Some(frame) = reader.next_frame()? {
-                let msg = match LaurnMessage::try_from_slice(&frame.raw_payload) {
-                    Ok(m) => m,
-                    Err(_) => {
-                        println!(
-                            "Frame {}: FAILED TO DECODE MESSAGE",
-                            reader.current_frame - 1
-                        );
-                        continue;
-                    }
-                };
-
-                println!("Frame {}", reader.current_frame - 1);
-                println!(
-                    "  Expected Output State: {}",
-                    hex::encode(frame.expected_output_state.0)
-                );
-
-                match msg.payload {
-                    protocol::LaurnMessagePayload::Transition(t) => {
-                        println!("  Transition ID: {:?}", t.transition.id);
-                        println!("  Epoch: {:?}", t.transition.metadata.epoch_id.0);
-                        println!(
-                            "  Authority: {}",
-                            hex::encode(t.transition.metadata.authority_id.0)
-                        );
-                        println!("  Input State: {}", hex::encode(t.transition.input_state.0));
-                        println!("  Timestamp (ms): {}", t.transition.metadata.timestamp_ms);
-                    }
-                    _ => {
-                        println!("  [Non-Transition Payload]");
-                    }
-                }
-                println!("----------------------------------------");
-            }
-        }
-        Commands::Verify { replay_file } => {
-            let buffer = fs::read(replay_file)?;
-            let mut reader = ReplayReader::new(&buffer)?;
-
-            println!("========================================");
-            println!("LAURN REPLAY VERIFICATION");
-            println!("========================================");
-
-            use authority::AuthorityEngine;
-            use epoch::EpochEngine;
-            use policy::{Policy, PolicyEngine, TransitionClass};
-            use verification::{VerificationContext, VerificationEngine};
-
-            let authority_engine = AuthorityEngine::new();
-            let epoch_engine = EpochEngine::new();
-            let policy_engine = PolicyEngine::new();
-            let policy = Policy {
-                protocol_version: 1,
-                max_state_freshness_ms: 0,
-                require_evidence: false,
-                allowed_transition_classes: TransitionClass::all(),
-                minimum_capability: authority::AuthorityCapability::empty(),
-            };
-            let verifier = VerificationEngine::new();
-
-            let mut seen_transitions = verification::replay::ReplayBuffer::default();
-
-            while let Some(frame) = reader.next_frame()? {
-                let msg = match LaurnMessage::try_from_slice(&frame.raw_payload) {
-                    Ok(m) => m,
-                    Err(_) => {
-                        println!(
-                            "Frame {}: VERIFICATION FAILED (Decode Error)",
-                            reader.current_frame - 1
-                        );
-                        continue;
-                    }
-                };
-
-                let protocol::LaurnMessagePayload::Transition(t) = msg.payload else {
-                    println!(
-                        "Frame {}: IGNORED (Not a Transition)",
-                        reader.current_frame - 1
-                    );
-                    continue;
-                };
-
-                let ctx = VerificationContext {
-                    transition: &t.transition,
-                    raw_payload: &frame.raw_payload,
-                    signature: &t.signature,
-                    expected_input_state: t.transition.input_state,
-                    generated_output_state: frame.expected_output_state,
-                    authority_engine: &authority_engine,
-                    epoch_engine: &epoch_engine,
-                    policy_engine: &policy_engine,
-                    policy: &policy,
-                    seen_transitions: &seen_transitions,
-                    parent_state_timestamp_ms: 0,
-                    has_evidence: false,
-                    transition_protocol_version: 1,
-                    transition_class: TransitionClass::from_bits_truncate(t.transition_class),
-                };
-
-                let result = verifier.verify(&ctx);
-                println!("Frame {}: {:?}", reader.current_frame - 1, result);
-                seen_transitions.insert(t.transition.id);
-            }
-        }
+        Commands::Dump { replay_file } => dump_replay(replay_file),
+        Commands::Verify { replay_file } => verify_replay(replay_file),
         Commands::Diverge {
             auth_file,
             test_file,
-        } => {
-            let auth_buffer = fs::read(auth_file)?;
-            let test_buffer = fs::read(test_file)?;
+        } => analyze_divergence(auth_file, test_file),
+    }
+}
 
-            let mut auth_reader = ReplayReader::new(&auth_buffer)?;
-            let mut test_reader = ReplayReader::new(&test_buffer)?;
+fn dump_replay(replay_file: &std::path::Path) -> Result<(), Box<dyn std::error::Error>> {
+    let buffer = fs::read(replay_file)?;
+    let mut reader = ReplayReader::new(&buffer)?;
 
-            println!("========================================");
-            println!("LAURN DIVERGENCE ANALYSIS");
-            println!("========================================");
+    println!("LAURN session replay dump");
+    println!("Version: {}", reader.header.version);
+    println!("Total Frames: {}", reader.total_frames);
+    println!(
+        "Initial State: {}",
+        hex::encode(reader.header.initial_state.0)
+    );
 
-            if let Some(report) = DivergenceAnalyzer::analyze(&mut auth_reader, &mut test_reader) {
-                println!("DIVERGENCE DETECTED at Frame {}:", report.frame_index);
-                use replay::divergence::DivergenceReason::*;
-                match report.reason {
-                    ParentMismatch { expected, actual } => {
-                        println!("  Reason: Parent Mismatch");
-                        println!("  Expected (Auth): {}", hex::encode(expected.0));
-                        println!("  Actual   (Test): {}", hex::encode(actual.0));
-                    }
-                    CommitmentMismatch { expected, actual } => {
-                        println!("  Reason: Commitment Mismatch (Nondeterministic Execution)");
-                        println!("  Expected (Auth): {}", hex::encode(expected.0));
-                        println!("  Actual   (Test): {}", hex::encode(actual.0));
-                    }
-                    EpochMismatch { expected, actual } => {
-                        println!("  Reason: Epoch Mismatch");
-                        println!("  Expected (Auth): {}", hex::encode(expected.0));
-                        println!("  Actual   (Test): {}", hex::encode(actual.0));
-                    }
-                    AuthorityMismatch { expected, actual } => {
-                        println!("  Reason: Authority Mismatch");
-                        println!("  Expected (Auth): {}", hex::encode(expected.0));
-                        println!("  Actual   (Test): {}", hex::encode(actual.0));
-                    }
-                    PayloadMismatch => {
-                        println!("  Reason: Unspecified Payload Mismatch");
-                    }
-                    LengthMismatch {
-                        expected_frames,
-                        actual_frames,
-                    } => {
-                        println!("  Reason: Length Mismatch");
-                        println!("  Expected Frames (Auth): {}", expected_frames);
-                        println!("  Actual Frames   (Test): {}", actual_frames);
-                    }
-                    DecodeFailed => {
-                        println!("  Reason: Decode Failed");
-                    }
-                }
-            } else {
-                println!("No divergence detected. Both replay streams are perfectly identical.");
+    while let Some(frame) = reader.next_frame()? {
+        let frame_index = reader.current_frame - 1;
+        let Ok(msg) = LaurnMessage::try_from_slice(&frame.raw_payload) else {
+            println!("Frame {frame_index}: FAILED TO DECODE MESSAGE");
+            continue;
+        };
+
+        println!("Frame {frame_index}");
+        println!(
+            "  Expected Output State: {}",
+            hex::encode(frame.expected_output_state.0)
+        );
+
+        match msg.payload {
+            protocol::LaurnMessagePayload::Transition(t) => {
+                println!("  Transition ID: {:?}", t.transition.id);
+                println!("  Epoch: {:?}", t.transition.metadata.epoch_id.0);
+                println!(
+                    "  Authority: {}",
+                    hex::encode(t.transition.metadata.authority_id.0)
+                );
+                println!("  Input State: {}", hex::encode(t.transition.input_state.0));
+                println!("  Timestamp (ms): {}", t.transition.metadata.timestamp_ms);
+            }
+            _ => println!("  Non-transition payload"),
+        }
+    }
+
+    Ok(())
+}
+
+fn verify_replay(replay_file: &std::path::Path) -> Result<(), Box<dyn std::error::Error>> {
+    let buffer = fs::read(replay_file)?;
+    let mut reader = ReplayReader::new(&buffer)?;
+
+    println!("LAURN replay verification");
+
+    let authority_engine = AuthorityEngine::new();
+    let epoch_engine = EpochEngine::new();
+    let policy_engine = PolicyEngine::new();
+    let policy = Policy {
+        protocol_version: 1,
+        max_state_freshness_ms: 0,
+        require_evidence: false,
+        allowed_transition_classes: TransitionClass::all(),
+        minimum_capability: authority::AuthorityCapability::empty(),
+    };
+    let verifier = VerificationEngine::new();
+    let mut seen_transitions = verification::replay::ReplayBuffer::default();
+
+    while let Some(frame) = reader.next_frame()? {
+        let frame_index = reader.current_frame - 1;
+        let Ok(msg) = LaurnMessage::try_from_slice(&frame.raw_payload) else {
+            println!("Frame {frame_index}: VERIFICATION FAILED (Decode Error)");
+            continue;
+        };
+
+        let protocol::LaurnMessagePayload::Transition(t) = msg.payload else {
+            println!("Frame {frame_index}: IGNORED (Not a Transition)");
+            continue;
+        };
+
+        let Some(transition_class) = TransitionClass::from_bits(t.transition_class) else {
+            println!("Frame {frame_index}: VERIFICATION FAILED (Unknown Transition Class)");
+            continue;
+        };
+
+        let ctx = VerificationContext {
+            transition: &t.transition,
+            raw_payload: &frame.raw_payload,
+            signature: &t.signature,
+            expected_input_state: t.transition.input_state,
+            generated_output_state: frame.expected_output_state,
+            authority_engine: &authority_engine,
+            epoch_engine: &epoch_engine,
+            policy_engine: &policy_engine,
+            policy: &policy,
+            seen_transitions: &seen_transitions,
+            parent_state_timestamp_ms: 0,
+            has_evidence: false,
+            transition_protocol_version: 1,
+            transition_class,
+        };
+
+        let result = verifier.verify(&ctx);
+        println!("Frame {frame_index}: {result:?}");
+
+        if result == verification::VerificationResult::Valid {
+            seen_transitions.insert(t.transition.id);
+        }
+    }
+
+    Ok(())
+}
+
+fn analyze_divergence(
+    auth_file: &std::path::Path,
+    test_file: &std::path::Path,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let auth_buffer = fs::read(auth_file)?;
+    let test_buffer = fs::read(test_file)?;
+
+    let mut auth_reader = ReplayReader::new(&auth_buffer)?;
+    let mut test_reader = ReplayReader::new(&test_buffer)?;
+
+    println!("LAURN divergence analysis");
+
+    if let Some(report) = DivergenceAnalyzer::analyze(&mut auth_reader, &mut test_reader) {
+        println!("DIVERGENCE DETECTED at Frame {}:", report.frame_index);
+
+        match report.reason {
+            DivergenceReason::ParentMismatch { expected, actual } => {
+                println!("  Reason: Parent Mismatch");
+                println!("  Expected (Auth): {}", hex::encode(expected.0));
+                println!("  Actual (Test): {}", hex::encode(actual.0));
+            }
+            DivergenceReason::CommitmentMismatch { expected, actual } => {
+                println!("  Reason: Commitment Mismatch");
+                println!("  Expected (Auth): {}", hex::encode(expected.0));
+                println!("  Actual (Test): {}", hex::encode(actual.0));
+            }
+            DivergenceReason::EpochMismatch { expected, actual } => {
+                println!("  Reason: Epoch Mismatch");
+                println!("  Expected (Auth): {}", hex::encode(expected.0));
+                println!("  Actual (Test): {}", hex::encode(actual.0));
+            }
+            DivergenceReason::AuthorityMismatch { expected, actual } => {
+                println!("  Reason: Authority Mismatch");
+                println!("  Expected (Auth): {}", hex::encode(expected.0));
+                println!("  Actual (Test): {}", hex::encode(actual.0));
+            }
+            DivergenceReason::PayloadMismatch => {
+                println!("  Reason: Payload Mismatch");
+            }
+            DivergenceReason::LengthMismatch {
+                expected_frames,
+                actual_frames,
+            } => {
+                println!("  Reason: Length Mismatch");
+                println!("  Expected Frames (Auth): {expected_frames}");
+                println!("  Actual Frames (Test): {actual_frames}");
+            }
+            DivergenceReason::DecodeFailed => {
+                println!("  Reason: Decode Failed");
             }
         }
+    } else {
+        println!("No divergence detected.");
     }
 
     Ok(())

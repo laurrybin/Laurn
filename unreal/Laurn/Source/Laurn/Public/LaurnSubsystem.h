@@ -80,7 +80,7 @@ public:
 	bool TickReplay(TArray<uint8>& OutPayload);
 
 	UFUNCTION(BlueprintCallable, Category = "LAURN|Replay")
-	bool AnalyzeDivergence(const FString& AuthoritativeReplayPath, const FString& TestReplayPath, FString& OutExplanation);
+	bool AnalyzeDivergence(const FString& ReferenceReplayPath, const FString& TestReplayPath, FString& OutExplanation);
 
 private:
 	// Opaque handles to the Rust engines

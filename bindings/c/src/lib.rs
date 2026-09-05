@@ -22,13 +22,12 @@ use std::slice;
 
 use authority::AuthorityEngine;
 use commitment::{CommitmentEngine, StateCommitment};
-use delta::StateDelta;
 use ed25519_dalek::Signer;
 use epoch::{Epoch, EpochEngine, EpochId, EpochStatus};
 use policy::{Policy, PolicyEngine, TransitionClass};
 use protocol::codec::LaurnCodec;
 use protocol::LaurnMessage;
-use state::CanonicalState;
+use replay::divergence::DivergenceReason;
 use transition::Transition;
 use verification::{VerificationContext, VerificationEngine, VerificationResult};
 
@@ -66,9 +65,7 @@ pub enum LaurnResult {
     DivergenceDetected = 12,
 }
 
-// ----------------------------------------------------------------------------
 // Opaque Handles
-// ----------------------------------------------------------------------------
 
 pub struct LaurnAuthorityEngineHandle {
     pub(crate) inner: AuthorityEngine,
@@ -92,25 +89,15 @@ pub struct LaurnTransitionHandle {
     pub(crate) transition_class: u32,
 }
 
-pub struct LaurnDeltaHandle {
-    pub(crate) inner: StateDelta,
-}
-
 pub struct LaurnMessageHandle {
     pub(crate) inner: LaurnMessage,
-}
-
-pub struct LaurnCanonicalStateHandle {
-    pub(crate) inner: CanonicalState,
 }
 
 pub struct LaurnPolicyHandle {
     pub(crate) inner: Policy,
 }
 
-// ----------------------------------------------------------------------------
 // Error Handling Helper
-// ----------------------------------------------------------------------------
 
 fn diagnostic_signing_key() -> ed25519_dalek::SigningKey {
     ed25519_dalek::SigningKey::from_bytes(&[0x42; 32])
@@ -126,9 +113,7 @@ where
     }
 }
 
-// ----------------------------------------------------------------------------
 // Authority Engine Operations
-// ----------------------------------------------------------------------------
 
 #[no_mangle]
 pub unsafe extern "C" fn laurn_authority_engine_create(
@@ -188,15 +173,13 @@ pub unsafe extern "C" fn laurn_authority_engine_register_diagnostic_authority(
         };
 
         match engine.register_authority(authority) {
-            Ok(_) => LaurnResult::Success,
+            Ok(()) => LaurnResult::Success,
             Err(_) => LaurnResult::InvalidConfig, // Or could be Success if already registered
         }
     })
 }
 
-// ----------------------------------------------------------------------------
 // Epoch Engine Operations
-// ----------------------------------------------------------------------------
 
 #[no_mangle]
 pub unsafe extern "C" fn laurn_epoch_engine_create(
@@ -295,9 +278,7 @@ pub unsafe extern "C" fn laurn_epoch_engine_close(
     })
 }
 
-// ----------------------------------------------------------------------------
 // Policy Engine Operations
-// ----------------------------------------------------------------------------
 
 #[no_mangle]
 pub unsafe extern "C" fn laurn_policy_engine_create(
@@ -331,9 +312,7 @@ pub unsafe extern "C" fn laurn_policy_engine_destroy(
     })
 }
 
-// ----------------------------------------------------------------------------
 // Policy Operations
-// ----------------------------------------------------------------------------
 
 #[no_mangle]
 pub unsafe extern "C" fn laurn_policy_create_default(
@@ -369,9 +348,7 @@ pub unsafe extern "C" fn laurn_policy_destroy(handle: *mut LaurnPolicyHandle) ->
     })
 }
 
-// ----------------------------------------------------------------------------
 // Verification Engine Operations
-// ----------------------------------------------------------------------------
 
 #[no_mangle]
 pub unsafe extern "C" fn laurn_verification_engine_create(
@@ -408,9 +385,7 @@ pub unsafe extern "C" fn laurn_verification_engine_destroy(
     })
 }
 
-// ----------------------------------------------------------------------------
 // Protocol Decoding
-// ----------------------------------------------------------------------------
 
 #[no_mangle]
 pub unsafe extern "C" fn laurn_protocol_decode_message(
@@ -450,9 +425,7 @@ pub unsafe extern "C" fn laurn_message_destroy(handle: *mut LaurnMessageHandle) 
     })
 }
 
-// ----------------------------------------------------------------------------
 // Protocol Encoding
-// ----------------------------------------------------------------------------
 
 fn build_transition(
     transition_id: u64,
@@ -552,14 +525,13 @@ pub unsafe extern "C" fn laurn_protocol_free_bytes(
         if buffer.is_null() {
             return LaurnResult::NullPointer;
         }
-        let _ = Box::from_raw(slice::from_raw_parts_mut(buffer, buffer_len));
+        let slice_ptr = std::ptr::slice_from_raw_parts_mut(buffer, buffer_len);
+        drop(Box::from_raw(slice_ptr));
         LaurnResult::Success
     })
 }
 
-// ----------------------------------------------------------------------------
 // Message Field Extraction
-// ----------------------------------------------------------------------------
 
 #[no_mangle]
 pub unsafe extern "C" fn laurn_message_get_transition(
@@ -672,9 +644,7 @@ pub unsafe extern "C" fn laurn_transition_get_class(
     })
 }
 
-// ----------------------------------------------------------------------------
 // State Commitment
-// ----------------------------------------------------------------------------
 
 #[no_mangle]
 pub unsafe extern "C" fn laurn_transition_get_timestamp_ms(
@@ -713,14 +683,15 @@ pub unsafe extern "C" fn laurn_state_commitment_compute(
 
 #[no_mangle]
 pub unsafe extern "C" fn laurn_free_bytes(ptr: *mut u8, len: usize) {
-    if !ptr.is_null() {
-        drop(Vec::from_raw_parts(ptr, len, len));
+    if ptr.is_null() {
+        return;
     }
+
+    let slice_ptr = std::ptr::slice_from_raw_parts_mut(ptr, len);
+    drop(Box::from_raw(slice_ptr));
 }
 
-// ----------------------------------------------------------------------------
 // Verification
-// ----------------------------------------------------------------------------
 
 #[repr(C)]
 pub struct LaurnVerificationParams {
@@ -778,30 +749,30 @@ pub unsafe extern "C" fn laurn_verify_transition(
         };
 
         let verifier = &*verifier;
-        let mut seen_transitions = match verifier.seen_transitions.lock() {
-            Ok(buffer) => buffer,
-            Err(_) => return LaurnResult::Panic,
+        let Ok(mut seen_transitions) = verifier.seen_transitions.lock() else {
+            return LaurnResult::Panic;
         };
 
-        let ctx = VerificationContext {
-            transition: &transition,
-            raw_payload,
-            signature: &signature,
-            expected_input_state: expected_input_state,
-            generated_output_state: generated_output_state,
-            authority_engine,
-            epoch_engine,
-            policy_engine,
-            policy,
-            seen_transitions: &seen_transitions,
-            parent_state_timestamp_ms: p.parent_state_timestamp_ms,
-            has_evidence: p.has_evidence,
-            transition_protocol_version: p.transition_protocol_version,
-            transition_class,
-        };
+        let result = {
+            let ctx = VerificationContext {
+                transition,
+                raw_payload,
+                signature,
+                expected_input_state,
+                generated_output_state,
+                authority_engine,
+                epoch_engine,
+                policy_engine,
+                policy,
+                seen_transitions: &seen_transitions,
+                parent_state_timestamp_ms: p.parent_state_timestamp_ms,
+                has_evidence: p.has_evidence,
+                transition_protocol_version: p.transition_protocol_version,
+                transition_class,
+            };
 
-        let result = verifier.inner.verify(&ctx);
-        drop(ctx);
+            verifier.inner.verify(&ctx)
+        };
 
         match result {
             VerificationResult::Valid => {
@@ -815,9 +786,7 @@ pub unsafe extern "C" fn laurn_verify_transition(
     })
 }
 
-// ----------------------------------------------------------------------------
 // Client Utilities (for Unreal Client to sign payloads)
-// ----------------------------------------------------------------------------
 
 #[no_mangle]
 pub unsafe extern "C" fn laurn_diagnostic_sign_transition(
@@ -880,9 +849,7 @@ pub unsafe extern "C" fn laurn_diagnostic_sign_transition(
     })
 }
 
-// ----------------------------------------------------------------------------
 // Replay Engine
-// ----------------------------------------------------------------------------
 
 pub struct LaurnReplayRecorderHandle {
     inner: replay::ReplayRecorder,
@@ -938,12 +905,11 @@ pub unsafe extern "C" fn laurn_replay_recorder_serialize(
             return LaurnResult::NullPointer;
         }
         match (*recorder).inner.serialize() {
-            Ok(mut buf) => {
-                buf.shrink_to_fit();
-                *out_len = buf.len();
-                let ptr = buf.as_mut_ptr();
-                std::mem::forget(buf);
-                *out_bytes = ptr;
+            Ok(bytes) => {
+                let mut buffer = bytes.into_boxed_slice();
+                *out_len = buffer.len();
+                *out_bytes = buffer.as_mut_ptr();
+                let _ = Box::into_raw(buffer);
                 LaurnResult::Success
             }
             Err(_) => LaurnResult::DecodeFailed,
@@ -1003,12 +969,10 @@ pub unsafe extern "C" fn laurn_replay_reader_next_frame(
         }
         match (*reader).inner.next_frame() {
             Ok(Some(frame)) => {
-                let mut buf = frame.raw_payload;
-                buf.shrink_to_fit();
-                *out_payload_len = buf.len();
-                let ptr = buf.as_mut_ptr();
-                std::mem::forget(buf);
-                *out_payload = ptr;
+                let mut buffer = frame.raw_payload.into_boxed_slice();
+                *out_payload_len = buffer.len();
+                *out_payload = buffer.as_mut_ptr();
+                let _ = Box::into_raw(buffer);
                 ptr::copy_nonoverlapping(
                     frame.expected_output_state.0.as_ptr(),
                     (*out_expected_output_state).as_mut_ptr(),
@@ -1091,32 +1055,31 @@ pub unsafe extern "C" fn laurn_replay_analyze_divergence(
                     actual_frames: 0,
                 };
 
-                use replay::divergence::DivergenceReason::*;
                 match report.reason {
-                    ParentMismatch { expected, actual } => {
+                    DivergenceReason::ParentMismatch { expected, actual } => {
                         c_report.reason = LaurnDivergenceReason::ParentMismatch;
                         c_report.expected_commitment = expected.0;
                         c_report.actual_commitment = actual.0;
                     }
-                    CommitmentMismatch { expected, actual } => {
+                    DivergenceReason::CommitmentMismatch { expected, actual } => {
                         c_report.reason = LaurnDivergenceReason::CommitmentMismatch;
                         c_report.expected_commitment = expected.0;
                         c_report.actual_commitment = actual.0;
                     }
-                    EpochMismatch { expected, actual } => {
+                    DivergenceReason::EpochMismatch { expected, actual } => {
                         c_report.reason = LaurnDivergenceReason::EpochMismatch;
                         c_report.expected_epoch = expected.0;
                         c_report.actual_epoch = actual.0;
                     }
-                    AuthorityMismatch { expected, actual } => {
+                    DivergenceReason::AuthorityMismatch { expected, actual } => {
                         c_report.reason = LaurnDivergenceReason::AuthorityMismatch;
                         c_report.expected_authority = expected.0;
                         c_report.actual_authority = actual.0;
                     }
-                    PayloadMismatch => {
+                    DivergenceReason::PayloadMismatch => {
                         c_report.reason = LaurnDivergenceReason::PayloadMismatch;
                     }
-                    LengthMismatch {
+                    DivergenceReason::LengthMismatch {
                         expected_frames,
                         actual_frames,
                     } => {
@@ -1124,7 +1087,7 @@ pub unsafe extern "C" fn laurn_replay_analyze_divergence(
                         c_report.expected_frames = expected_frames;
                         c_report.actual_frames = actual_frames;
                     }
-                    DecodeFailed => {
+                    DivergenceReason::DecodeFailed => {
                         c_report.reason = LaurnDivergenceReason::DecodeFailed;
                     }
                 }
@@ -1137,9 +1100,133 @@ pub unsafe extern "C" fn laurn_replay_analyze_divergence(
     })
 }
 
+/// Returns the protocol version as an integer.
+#[no_mangle]
+pub extern "C" fn laurn_get_version() -> u32 {
+    let version = version_crate::ProtocolVersion::current();
+    (version.major << 16) | (version.minor << 8) | version.patch
+}
+
+/// Populates a buffer with the build info string (null-terminated).
+#[no_mangle]
+pub extern "C" fn laurn_get_build_info(
+    buffer: *mut std::os::raw::c_char,
+    buffer_len: usize,
+) -> LaurnResult {
+    catch_unwind_ffi(|| {
+        if buffer.is_null() {
+            return LaurnResult::NullPointer;
+        }
+
+        let build_info = format!("LAURN Core v{}", version_crate::ProtocolVersion::current());
+        let Ok(c_str) = std::ffi::CString::new(build_info) else {
+            return LaurnResult::EncodeFailed;
+        };
+        let bytes = c_str.as_bytes_with_nul();
+
+        if bytes.len() > buffer_len {
+            return LaurnResult::BufferTooSmall;
+        }
+
+        unsafe {
+            std::ptr::copy_nonoverlapping(bytes.as_ptr(), buffer.cast::<u8>(), bytes.len());
+        }
+
+        LaurnResult::Success
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    struct VerificationTestHandles {
+        authority_engine: *mut LaurnAuthorityEngineHandle,
+        epoch_engine: *mut LaurnEpochEngineHandle,
+        policy_engine: *mut LaurnPolicyEngineHandle,
+        verifier: *mut LaurnVerificationEngineHandle,
+        policy: *mut LaurnPolicyHandle,
+    }
+
+    impl VerificationTestHandles {
+        fn create(epoch_id: &[u8; 32], input_state: &[u8; 32]) -> Self {
+            unsafe {
+                let mut handles = Self {
+                    authority_engine: ptr::null_mut(),
+                    epoch_engine: ptr::null_mut(),
+                    policy_engine: ptr::null_mut(),
+                    verifier: ptr::null_mut(),
+                    policy: ptr::null_mut(),
+                };
+
+                assert_eq!(
+                    laurn_authority_engine_create(std::ptr::from_mut(
+                        &mut handles.authority_engine
+                    )),
+                    LaurnResult::Success
+                );
+                assert_eq!(
+                    laurn_authority_engine_register_diagnostic_authority(handles.authority_engine),
+                    LaurnResult::Success
+                );
+                assert_eq!(
+                    laurn_epoch_engine_create(std::ptr::from_mut(&mut handles.epoch_engine)),
+                    LaurnResult::Success
+                );
+                assert_eq!(
+                    laurn_epoch_engine_register(
+                        handles.epoch_engine,
+                        std::ptr::from_ref(epoch_id),
+                        1,
+                        500,
+                        1_500,
+                        std::ptr::from_ref(input_state),
+                    ),
+                    LaurnResult::Success
+                );
+                assert_eq!(
+                    laurn_epoch_engine_activate(handles.epoch_engine, std::ptr::from_ref(epoch_id)),
+                    LaurnResult::Success
+                );
+                assert_eq!(
+                    laurn_policy_engine_create(std::ptr::from_mut(&mut handles.policy_engine)),
+                    LaurnResult::Success
+                );
+                assert_eq!(
+                    laurn_policy_create_default(std::ptr::from_mut(&mut handles.policy)),
+                    LaurnResult::Success
+                );
+                assert_eq!(
+                    laurn_verification_engine_create(std::ptr::from_mut(&mut handles.verifier)),
+                    LaurnResult::Success
+                );
+
+                handles
+            }
+        }
+
+        fn destroy(self) {
+            unsafe {
+                assert_eq!(laurn_policy_destroy(self.policy), LaurnResult::Success);
+                assert_eq!(
+                    laurn_verification_engine_destroy(self.verifier),
+                    LaurnResult::Success
+                );
+                assert_eq!(
+                    laurn_policy_engine_destroy(self.policy_engine),
+                    LaurnResult::Success
+                );
+                assert_eq!(
+                    laurn_epoch_engine_destroy(self.epoch_engine),
+                    LaurnResult::Success
+                );
+                assert_eq!(
+                    laurn_authority_engine_destroy(self.authority_engine),
+                    LaurnResult::Success
+                );
+            }
+        }
+    }
 
     #[test]
     fn test_ffi_engine_lifecycle() {
@@ -1147,7 +1234,7 @@ mod tests {
             let mut handle: *mut LaurnAuthorityEngineHandle = ptr::null_mut();
 
             assert_eq!(
-                laurn_authority_engine_create(&mut handle as *mut _),
+                laurn_authority_engine_create(std::ptr::from_mut(&mut handle)),
                 LaurnResult::Success
             );
             assert!(!handle.is_null());
@@ -1220,53 +1307,12 @@ mod tests {
             let mut authority_id = [0u8; 32];
             let mut signature = [0u8; 64];
 
-            let mut authority_engine = ptr::null_mut();
-            let mut epoch_engine = ptr::null_mut();
-            let mut policy_engine = ptr::null_mut();
-            let mut verifier = ptr::null_mut();
-            let mut policy = ptr::null_mut();
-
-            assert_eq!(
-                laurn_authority_engine_create(std::ptr::from_mut(&mut authority_engine)),
-                LaurnResult::Success
-            );
-            assert_eq!(
-                laurn_authority_engine_register_diagnostic_authority(authority_engine),
-                LaurnResult::Success
-            );
-
-            assert_eq!(
-                laurn_epoch_engine_create(std::ptr::from_mut(&mut epoch_engine)),
-                LaurnResult::Success
-            );
-            assert_eq!(
-                laurn_epoch_engine_register(
-                    epoch_engine,
-                    std::ptr::from_ref(&epoch_id),
-                    1,
-                    500,
-                    1_500,
-                    std::ptr::from_ref(&input_state),
-                ),
-                LaurnResult::Success
-            );
-            assert_eq!(
-                laurn_epoch_engine_activate(epoch_engine, std::ptr::from_ref(&epoch_id)),
-                LaurnResult::Success
-            );
-
-            assert_eq!(
-                laurn_policy_engine_create(std::ptr::from_mut(&mut policy_engine)),
-                LaurnResult::Success
-            );
-            assert_eq!(
-                laurn_policy_create_default(std::ptr::from_mut(&mut policy)),
-                LaurnResult::Success
-            );
-            assert_eq!(
-                laurn_verification_engine_create(std::ptr::from_mut(&mut verifier)),
-                LaurnResult::Success
-            );
+            let handles = VerificationTestHandles::create(&epoch_id, &input_state);
+            let authority_engine = handles.authority_engine;
+            let epoch_engine = handles.epoch_engine;
+            let policy_engine = handles.policy_engine;
+            let verifier = handles.verifier;
+            let policy = handles.policy;
 
             assert_eq!(
                 laurn_diagnostic_sign_transition(
@@ -1333,23 +1379,7 @@ mod tests {
                 LaurnResult::VerificationDuplicate
             );
 
-            assert_eq!(laurn_policy_destroy(policy), LaurnResult::Success);
-            assert_eq!(
-                laurn_verification_engine_destroy(verifier),
-                LaurnResult::Success
-            );
-            assert_eq!(
-                laurn_policy_engine_destroy(policy_engine),
-                LaurnResult::Success
-            );
-            assert_eq!(
-                laurn_epoch_engine_destroy(epoch_engine),
-                LaurnResult::Success
-            );
-            assert_eq!(
-                laurn_authority_engine_destroy(authority_engine),
-                LaurnResult::Success
-            );
+            handles.destroy();
         }
     }
 
@@ -1368,43 +1398,4 @@ mod tests {
     }
 }
 
-// ----------------------------------------------------------------------------
 // Telemetry and Versioning
-// ----------------------------------------------------------------------------
-
-/// Returns the protocol version as an integer.
-#[no_mangle]
-pub extern "C" fn laurn_get_version() -> u32 {
-    let version = version_crate::ProtocolVersion::current();
-    ((version.major as u32) << 16) | ((version.minor as u32) << 8) | (version.patch as u32)
-}
-
-/// Populates a buffer with the build info string (null-terminated).
-#[no_mangle]
-pub extern "C" fn laurn_get_build_info(
-    buffer: *mut std::os::raw::c_char,
-    buffer_len: usize,
-) -> LaurnResult {
-    catch_unwind_ffi(|| {
-        if buffer.is_null() {
-            return LaurnResult::NullPointer;
-        }
-
-        let build_info = format!("LAURN Core v{}", version_crate::ProtocolVersion::current());
-        let c_str = match std::ffi::CString::new(build_info) {
-            Ok(s) => s,
-            Err(_) => return LaurnResult::EncodeFailed,
-        };
-        let bytes = c_str.as_bytes_with_nul();
-
-        if bytes.len() > buffer_len {
-            return LaurnResult::BufferTooSmall;
-        }
-
-        unsafe {
-            std::ptr::copy_nonoverlapping(bytes.as_ptr(), buffer as *mut u8, bytes.len());
-        }
-
-        LaurnResult::Success
-    })
-}

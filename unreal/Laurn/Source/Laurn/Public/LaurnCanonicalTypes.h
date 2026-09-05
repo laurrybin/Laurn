@@ -19,9 +19,7 @@
 #include "Math/Rotator.h"
 #include "LaurnCanonicalTypes.generated.h"
 
-// ----------------------------------------------------------------------------
 // Deterministic Canonical Types
-// ----------------------------------------------------------------------------
 // LAURN demands strict determinism for all state transitions. Floating-point
 // variables (like double in UE5) are notoriously difficult to guarantee
 // identical across different hardware architectures and compiler flags.
@@ -32,7 +30,7 @@
 #pragma pack(push, 1)
 
 /**
- * A perfectly deterministic quantized 3D vector.
+ * A deterministically quantized 3D vector.
  * Coordinates are typically quantized to millimeters (e.g., FVector value * 1000).
  */
 USTRUCT(BlueprintType)
@@ -65,7 +63,7 @@ struct LAURN_API FLaurnQuantizedVector
 };
 
 /**
- * A perfectly deterministic quantized rotator.
+ * A deterministically quantized rotator.
  * Rotations are quantized to fixed-point degrees (e.g., degrees * 1000).
  */
 USTRUCT(BlueprintType)

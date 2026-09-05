@@ -35,7 +35,7 @@ pub enum EpochStatus {
 
 /// An Epoch bounds the validity of state transitions in time.
 /// It strictly enforces sequencing and protects against replay attacks
-/// by guaranteeing that transitions are only accepted during an active, non-expired window.
+/// so that transitions are accepted only during an active, non-expired window.
 #[derive(Debug, Clone, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
 pub struct Epoch {
     pub id: EpochId,

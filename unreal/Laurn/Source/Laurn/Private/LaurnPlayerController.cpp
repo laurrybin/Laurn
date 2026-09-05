@@ -38,7 +38,7 @@ void ALaurnPlayerController::ServerSubmitTransition_Implementation(const TArray<
 
 				if (bIsValid)
 				{
-					UE_LOG(LogTemp, Log, TEXT("LAURN verification succeeded. Transition accepted for authoritative game logic."));
+					UE_LOG(LogTemp, Log, TEXT("LAURN verification succeeded. Transition accepted for host game logic."));
 				}
 				else
 				{
