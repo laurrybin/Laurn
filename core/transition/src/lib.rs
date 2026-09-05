@@ -1,4 +1,4 @@
-// Copyright 2026 laurrybin and Laurn Contributors
+// Copyright 2026 Darwin Clay O. and Lawrence Obina
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -57,7 +57,7 @@ impl PartialEq for TransitionCommitment {
 pub struct TransitionId(pub u64);
 
 /// Metadata associated with a Transition, carrying authority and temporal information.
-/// Timestamps are strictly represented as `u64` (e.g., milliseconds since Unix Epoch) 
+/// Timestamps are strictly represented as `u64` (e.g., milliseconds since Unix Epoch)
 /// to avoid floating point non-determinism across platforms.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
 #[repr(C)]
@@ -69,7 +69,7 @@ pub struct TransitionMetadata {
 
 /// A verifiable transition linking `State[n]` to `State[n+1]`.
 ///
-/// This struct holds the cryptographic commitments of the inputs and outputs, rather than 
+/// This struct holds the cryptographic commitments of the inputs and outputs, rather than
 /// the raw payloads, keeping it lightweight.
 #[derive(Debug, Clone, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
 pub struct Transition {
@@ -81,24 +81,19 @@ pub struct Transition {
 }
 
 impl Transition {
-    /// Validates the transition by proving that the provided raw payload matches the `payload_commitment` 
-    /// and that executing the payload on `input_state` legitimately yields `output_state`.
-    /// 
-    /// In Phase 05, this simply validates the cryptographic integrity of the payload commitment 
-    /// and the matching generated output state. Future phases will integrate the WASM execution engine here.
+    /// Validates that the raw payload matches `payload_commitment` and that the
+    /// host-supplied generated output commitment matches `output_state`.
+    ///
+    /// This method does not execute the payload or derive application state.
     #[must_use]
-    pub fn validate(
-        &self,
-        raw_payload: &[u8],
-        generated_output_state: StateCommitment,
-    ) -> bool {
-        // 1. Verify the payload matches the commitment
+    pub fn validate(&self, raw_payload: &[u8], generated_output_state: StateCommitment) -> bool {
+        // Verify the payload commitment.
         let computed_payload_commitment = TransitionCommitment::compute(raw_payload);
         if self.payload_commitment != computed_payload_commitment {
             return false;
         }
 
-        // 2. Verify the output state matches what the engine actually produced
+        // Verify the host-generated output commitment.
         if self.output_state != generated_output_state {
             return false;
         }
@@ -129,16 +124,16 @@ mod tests {
     fn test_transition_validation() {
         let raw_payload = b"jump action";
         let valid_payload_commitment = TransitionCommitment::compute(raw_payload);
-        
+
         let input_state = StateCommitment([1u8; 32]);
         let output_state = StateCommitment([2u8; 32]);
-        
+
         let metadata = TransitionMetadata {
             authority_id: AuthorityId([0u8; 32]),
             epoch_id: EpochId([1u8; 32]),
-            timestamp_ms: 1622548800000,
+            timestamp_ms: 1_622_548_800_000,
         };
-        
+
         let transition = Transition {
             id: TransitionId(42),
             metadata,

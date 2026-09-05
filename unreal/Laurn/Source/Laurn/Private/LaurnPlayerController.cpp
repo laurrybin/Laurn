@@ -1,4 +1,4 @@
-// Copyright 2026 laurrybin and Laurn Contributors
+// Copyright 2026 Darwin Clay O. and Lawrence Obina
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,10 +18,9 @@
 
 bool ALaurnPlayerController::ServerSubmitTransition_Validate(const TArray<uint8>& TransitionPayload)
 {
-	// Basic size validation before passing to LAURN engine
 	if (TransitionPayload.Num() == 0 || TransitionPayload.Num() > 65536)
 	{
-		return false; // Automatically drops connection if validation fails
+		return false;
 	}
 	return true;
 }
@@ -38,14 +37,11 @@ void ALaurnPlayerController::ServerSubmitTransition_Implementation(const TArray<
 
 				if (bIsValid)
 				{
-					// If verified, apply the state change dictated by the transition payload to the server's authoritative state
-					UE_LOG(LogTemp, Log, TEXT("LAURN Verification SUCCESS. Applying transition."));
+					UE_LOG(LogTemp, Log, TEXT("LAURN verification succeeded. Transition accepted for host game logic."));
 				}
 				else
 				{
-					// Reject transition. The state remains unmodified.
-					// Depending on severity, we might disconnect the player.
-					UE_LOG(LogTemp, Warning, TEXT("LAURN Verification FAILED. Dropping transition."));
+					UE_LOG(LogTemp, Warning, TEXT("LAURN verification failed. Dropping transition."));
 				}
 			}
 		}

@@ -1,4 +1,4 @@
-// Copyright 2026 laurrybin and Laurn Contributors
+// Copyright 2026 Darwin Clay O. and Lawrence Obina
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -35,8 +35,8 @@ void ULaurnSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	}
 	else
 	{
-		// For deterministic testing, register the test authority with the engine
-		laurn_authority_engine_register_test_authority(AuthorityEngine);
+		// For deterministic diagnostics, register the diagnostic authority with the engine
+		laurn_authority_engine_register_diagnostic_authority(AuthorityEngine);
 	}
 
 	// Create Epoch Engine
@@ -117,7 +117,7 @@ bool ULaurnSubsystem::ComputeStateCommitment(const TArray<uint8>& StateBuffer, T
 	LaurnResult Result = laurn_state_commitment_compute(
 		StateBuffer.GetData(),
 		StateBuffer.Num(),
-		reinterpret_cast<uint8_t(*)[32]>(OutHash.GetData())
+		static_cast<uint8_t(*)[32]>(static_cast<void*>(OutHash.GetData()))
 	);
 
 	if (Result != LAURN_SUCCESS)
@@ -135,6 +135,7 @@ void ULaurnSubsystem::RegisterStateComponent(ULaurnStateComponent* Component)
 	if (Component && !RegisteredStateComponents.Contains(Component))
 	{
 		RegisteredStateComponents.Add(Component);
+		RefreshCanonicalStateCommitment();
 	}
 }
 
@@ -143,35 +144,95 @@ void ULaurnSubsystem::UnregisterStateComponent(ULaurnStateComponent* Component)
 	if (Component)
 	{
 		RegisteredStateComponents.Remove(Component);
+		RefreshCanonicalStateCommitment();
 	}
 }
 
 bool ULaurnSubsystem::ComputeGlobalStateCommitment(TArray<uint8>& OutHash) const
 {
-	// 1. Sort components deterministically by StateId to ensure consistent ordering
-	// across all peers, regardless of spawn order.
 	TArray<ULaurnStateComponent*> SortedComponents = RegisteredStateComponents;
+	SortedComponents.RemoveAll([](const ULaurnStateComponent* Component) {
+		return Component == nullptr;
+	});
 	SortedComponents.Sort([](const ULaurnStateComponent& A, const ULaurnStateComponent& B) {
 		return A.StateId < B.StateId;
 	});
 
-	// 2. Concatenate canonical state buffers
-	TArray<uint8> GlobalStateBuffer;
-	
-	for (ULaurnStateComponent* Comp : SortedComponents)
+	for (int32 Index = 1; Index < SortedComponents.Num(); ++Index)
 	{
-		if (Comp)
+		if (SortedComponents[Index - 1]->StateId == SortedComponents[Index]->StateId)
 		{
-			Comp->SerializeCanonicalState(GlobalStateBuffer);
+			UE_LOG(
+				LogLaurn,
+				Error,
+				TEXT("Duplicate LAURN StateId %u; refusing to compute a canonical state commitment."),
+				SortedComponents[Index]->StateId
+			);
+			OutHash.Reset();
+			return false;
 		}
 	}
 
-	// 3. Delegate to Laurn engine
+	auto AppendUInt32LE = [](TArray<uint8>& Buffer, uint32 Value) {
+		uint8 Bytes[4];
+		Bytes[0] = static_cast<uint8>((Value >> 0) & 0xFFu);
+		Bytes[1] = static_cast<uint8>((Value >> 8) & 0xFFu);
+		Bytes[2] = static_cast<uint8>((Value >> 16) & 0xFFu);
+		Bytes[3] = static_cast<uint8>((Value >> 24) & 0xFFu);
+		Buffer.Append(Bytes, 4);
+	};
+
+	TArray<uint8> GlobalStateBuffer;
+	const uint8 EncodingMagic[8] = {'L', 'A', 'U', 'R', 'N', 'S', 'T', '1'};
+	GlobalStateBuffer.Append(EncodingMagic, UE_ARRAY_COUNT(EncodingMagic));
+	AppendUInt32LE(GlobalStateBuffer, static_cast<uint32>(SortedComponents.Num()));
+
+	for (ULaurnStateComponent* Component : SortedComponents)
+	{
+		TArray<uint8> ComponentBuffer;
+		Component->SerializeCanonicalState(ComponentBuffer);
+
+		AppendUInt32LE(GlobalStateBuffer, static_cast<uint32>(ComponentBuffer.Num()));
+		GlobalStateBuffer.Append(ComponentBuffer);
+	}
+
 	return ComputeStateCommitment(GlobalStateBuffer, OutHash);
 }
 
-bool ULaurnSubsystem::VerifyIncomingTransition(const TArray<uint8>& TransitionPayload) const
+bool ULaurnSubsystem::RefreshCanonicalStateCommitment()
 {
+	TArray<uint8> StateHash;
+	if (ComputeGlobalStateCommitment(StateHash) == false)
+	{
+		CanonicalStateCommitment.Reset();
+		bHasCanonicalState = false;
+		bHasCanonicalTimestamp = false;
+		return false;
+	}
+
+	if (StateHash.Num() == 32)
+	{
+		CanonicalStateCommitment = MoveTemp(StateHash);
+		CanonicalStateTimestampMs = 0;
+		bHasCanonicalState = true;
+		bHasCanonicalTimestamp = false;
+		return true;
+	}
+
+	CanonicalStateCommitment.Reset();
+	bHasCanonicalState = false;
+	bHasCanonicalTimestamp = false;
+	return false;
+}
+
+bool ULaurnSubsystem::VerifyIncomingTransition(const TArray<uint8>& TransitionPayload)
+{
+	if (bHasCanonicalState == false || (CanonicalStateCommitment.Num() == 32) == false)
+	{
+		UE_LOG(LogLaurn, Warning, TEXT("Canonical state has not been initialized."));
+		return false;
+	}
+
 	if (TransitionPayload.Num() == 0 || !VerificationEngine)
 	{
 		return false;
@@ -215,8 +276,16 @@ bool ULaurnSubsystem::VerifyIncomingTransition(const TArray<uint8>& TransitionPa
 	uint32_t ProtocolVersion = 1;
 	laurn_message_get_protocol_version(MessageHandle, &ProtocolVersion);
 
-	uint32_t TransitionClass = 1;
-	laurn_transition_get_class(TransitionHandle, &TransitionClass);
+	uint32_t TransitionClass = 0;
+	uint64_t TransitionTimestampMs = 0;
+
+	if (laurn_transition_get_class(TransitionHandle, &TransitionClass) != LAURN_SUCCESS ||
+		laurn_transition_get_timestamp_ms(TransitionHandle, &TransitionTimestampMs) != LAURN_SUCCESS)
+	{
+		laurn_transition_destroy(TransitionHandle);
+		laurn_message_destroy(MessageHandle);
+		return false;
+	}
 
 	// 3. Generate expected output state commitment (Global State hash)
 	TArray<uint8> OutputStateHash;
@@ -235,9 +304,8 @@ bool ULaurnSubsystem::VerifyIncomingTransition(const TArray<uint8>& TransitionPa
 	Params.raw_payload = RawPayload;
 	Params.raw_payload_len = RawPayloadLen;
 	Params.signature = &Signature;
-	uint8_t ZeroState[32] = {0};
-	Params.expected_input_state = &ZeroState;
-	Params.generated_output_state = reinterpret_cast<uint8_t(*)[32]>(OutputStateHash.GetData());
+	Params.expected_input_state = static_cast<const uint8_t(*)[32]>(static_cast<const void*>(CanonicalStateCommitment.GetData()));
+	Params.generated_output_state = static_cast<uint8_t(*)[32]>(static_cast<void*>(OutputStateHash.GetData()));
 	Params.authority_engine = AuthorityEngine;
 	Params.epoch_engine = EpochEngine;
 	Params.policy_engine = PolicyEngine;
@@ -245,12 +313,20 @@ bool ULaurnSubsystem::VerifyIncomingTransition(const TArray<uint8>& TransitionPa
 	laurn_policy_create_default(&PolicyHandle);
 	Params.policy = PolicyHandle; 
 	
-	Params.parent_state_timestamp_ms = 0;
+	Params.parent_state_timestamp_ms = bHasCanonicalTimestamp ? CanonicalStateTimestampMs : TransitionTimestampMs;
 	Params.has_evidence = false;
 	Params.transition_protocol_version = ProtocolVersion;
 	Params.transition_class = TransitionClass;
 
 	LaurnResult VerifyResult = laurn_verify_transition(VerificationEngine, &Params);
+
+	if (VerifyResult == LAURN_SUCCESS)
+	{
+		CanonicalStateCommitment = OutputStateHash;
+		CanonicalStateTimestampMs = TransitionTimestampMs;
+		bHasCanonicalState = true;
+		bHasCanonicalTimestamp = true;
+	}
 
 	if (VerifyResult == LAURN_SUCCESS && ReplayRecorder != nullptr)
 	{
@@ -258,7 +334,7 @@ bool ULaurnSubsystem::VerifyIncomingTransition(const TArray<uint8>& TransitionPa
 			ReplayRecorder,
 			RawPayload,
 			RawPayloadLen,
-			reinterpret_cast<const uint8_t(*)[32]>(OutputStateHash.GetData())
+			static_cast<const uint8_t(*)[32]>(static_cast<const void*>(OutputStateHash.GetData()))
 		);
 	}
 
@@ -285,7 +361,7 @@ bool ULaurnSubsystem::StartRecording()
 	}
 
 	LaurnResult Result = laurn_replay_recorder_create(
-		reinterpret_cast<const uint8_t(*)[32]>(InitialState.GetData()),
+		static_cast<const uint8_t(*)[32]>(static_cast<const void*>(InitialState.GetData())),
 		&ReplayRecorder
 	);
 
@@ -376,12 +452,12 @@ bool ULaurnSubsystem::TickReplay(TArray<uint8>& OutPayload)
 	return true;
 }
 
-bool ULaurnSubsystem::AnalyzeDivergence(const FString& AuthoritativeReplayPath, const FString& TestReplayPath, FString& OutExplanation)
+bool ULaurnSubsystem::AnalyzeDivergence(const FString& ReferenceReplayPath, const FString& TestReplayPath, FString& OutExplanation)
 {
 	TArray<uint8> AuthBuffer;
-	if (!FFileHelper::LoadFileToArray(AuthBuffer, *AuthoritativeReplayPath))
+	if (!FFileHelper::LoadFileToArray(AuthBuffer, *ReferenceReplayPath))
 	{
-		OutExplanation = TEXT("Failed to load Authoritative Replay.");
+		OutExplanation = TEXT("Failed to load reference replay.");
 		return false;
 	}
 
@@ -395,7 +471,7 @@ bool ULaurnSubsystem::AnalyzeDivergence(const FString& AuthoritativeReplayPath, 
 	LaurnReplayReaderHandle* AuthReader = nullptr;
 	if (laurn_replay_reader_create(AuthBuffer.GetData(), AuthBuffer.Num(), &AuthReader) != LAURN_SUCCESS)
 	{
-		OutExplanation = TEXT("Failed to create Authoritative Replay Reader.");
+		OutExplanation = TEXT("Failed to create reference replay reader.");
 		return false;
 	}
 
@@ -427,7 +503,7 @@ bool ULaurnSubsystem::AnalyzeDivergence(const FString& AuthoritativeReplayPath, 
 			ReasonStr = TEXT("Parent State Mismatch");
 			break;
 		case LAURN_DIVERGENCE_COMMITMENT_MISMATCH:
-			ReasonStr = TEXT("Commitment Mismatch (Nondeterministic Execution)");
+			ReasonStr = TEXT("Commitment Mismatch");
 			break;
 		case LAURN_DIVERGENCE_EPOCH_MISMATCH:
 			ReasonStr = TEXT("Epoch Mismatch");

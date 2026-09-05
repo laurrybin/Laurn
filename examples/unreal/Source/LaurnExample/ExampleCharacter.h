@@ -13,21 +13,18 @@
 // limitations under the License.
 
 #pragma once
-
 #include "CoreMinimal.h"
-#include "GameFramework/GameStateBase.h"
-#include "ExampleGameState.generated.h"
-
-class ULaurnStateComponent;
+#include "GameFramework/Character.h"
+#include "ExampleCharacter.generated.h"
 
 UCLASS()
-class LAURNEXAMPLE_API AExampleGameState : public AGameStateBase
+class LAURNEXAMPLE_API AExampleCharacter : public ACharacter
 {
     GENERATED_BODY()
-
 public:
-    AExampleGameState();
+    AExampleCharacter();
+    virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "LAURN")
-    ULaurnStateComponent* LaurnStateComponent;
+    void MoveForward(float Value);
+    void MoveRight(float Value);
 };

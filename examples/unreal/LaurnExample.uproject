@@ -18,5 +18,8 @@
 			"Name": "Laurn",
 			"Enabled": true
 		}
+	],
+	"AdditionalPluginDirectories": [
+		"../../unreal"
 	]
 }

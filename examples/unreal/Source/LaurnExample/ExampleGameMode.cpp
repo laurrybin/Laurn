@@ -12,22 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma once
+#include "ExampleGameMode.h"
+#include "ExampleCharacter.h"
+#include "ExamplePlayerController.h"
+#include "ExampleHUD.h"
+#include "ExampleGameState.h"
 
-#include "CoreMinimal.h"
-#include "GameFramework/GameStateBase.h"
-#include "ExampleGameState.generated.h"
-
-class ULaurnStateComponent;
-
-UCLASS()
-class LAURNEXAMPLE_API AExampleGameState : public AGameStateBase
+AExampleGameMode::AExampleGameMode()
 {
-    GENERATED_BODY()
-
-public:
-    AExampleGameState();
-
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "LAURN")
-    ULaurnStateComponent* LaurnStateComponent;
-};
+    DefaultPawnClass = AExampleCharacter::StaticClass();
+    PlayerControllerClass = AExamplePlayerController::StaticClass();
+    HUDClass = AExampleHUD::StaticClass();
+    GameStateClass = AExampleGameState::StaticClass();
+}

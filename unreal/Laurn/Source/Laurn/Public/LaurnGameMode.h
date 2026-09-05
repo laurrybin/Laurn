@@ -1,4 +1,4 @@
-// Copyright 2026 laurrybin and Laurn Contributors
+// Copyright 2026 Darwin Clay O. and Lawrence Obina
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,8 +19,7 @@
 #include "LaurnGameMode.generated.h"
 
 /**
- * ALaurnGameMode forces the use of ALaurnPlayerController for all connections,
- * ensuring all client input is strictly routed through the LAURN transition verifier.
+ * ALaurnGameMode configures ALaurnPlayerController as its player controller class.
  */
 UCLASS()
 class LAURN_API ALaurnGameMode : public AGameModeBase

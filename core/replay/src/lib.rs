@@ -1,4 +1,4 @@
-// Copyright 2026 laurrybin and Laurn Contributors
+// Copyright 2026 Darwin Clay O. and Lawrence Obina
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -67,6 +67,10 @@ impl ReplayRecorder {
     }
 
     /// Serializes the entire session to a byte vector.
+    ///
+    /// # Errors
+    ///
+    /// Returns an I/O error if Borsh serialization fails.
     pub fn serialize(&self) -> Result<Vec<u8>, std::io::Error> {
         let mut buffer = Vec::new();
         self.header.serialize(&mut buffer)?;
@@ -84,6 +88,12 @@ pub struct ReplayReader<'a> {
 }
 
 impl<'a> ReplayReader<'a> {
+    /// Creates a reader over a serialized replay buffer.
+    ///
+    /// # Errors
+    ///
+    /// Returns an I/O error when the replay header or frame count cannot be
+    /// decoded, or when the replay magic bytes are invalid.
     pub fn new(buffer: &'a [u8]) -> Result<Self, std::io::Error> {
         let mut buf = buffer;
         let header = ReplayHeader::deserialize(&mut buf)?;
@@ -104,6 +114,10 @@ impl<'a> ReplayReader<'a> {
     }
 
     /// Reads the next frame from the stream.
+    ///
+    /// # Errors
+    ///
+    /// Returns an I/O error if the next replay frame cannot be decoded.
     pub fn next_frame(&mut self) -> Result<Option<ReplayFrame>, std::io::Error> {
         if self.current_frame >= self.total_frames {
             return Ok(None);
@@ -119,36 +133,37 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_replay_recorder_and_reader() {
+    fn test_replay_recorder_and_reader() -> Result<(), Box<dyn std::error::Error>> {
         let initial_state = StateCommitment([0; 32]); // Just zeroes
-        let mut recorder = ReplayRecorder::new(initial_state.clone());
+        let mut recorder = ReplayRecorder::new(initial_state);
 
         let raw_payload = vec![1, 2, 3, 4];
         let mut output_state = StateCommitment([0; 32]);
-        output_state.0[0] = 99; // some fake state
+        output_state.0[0] = 99; // some synthetic state
 
-        recorder.add_frame(raw_payload.clone(), output_state.clone());
+        recorder.add_frame(raw_payload.clone(), output_state);
 
         // Serialize
-        let serialized = recorder.serialize().expect("Serialization failed");
+        let serialized = recorder.serialize()?;
 
         // Deserialize
-        let mut reader = ReplayReader::new(&serialized).expect("Reader init failed");
-        
+        let mut reader = ReplayReader::new(&serialized)?;
+
         assert_eq!(reader.header.magic, *b"LAURNRPL");
         assert_eq!(reader.header.initial_state, initial_state);
         assert_eq!(reader.total_frames, 1);
 
-        let frame = reader.next_frame().expect("Next frame failed").expect("Should have one frame");
+        let frame = reader.next_frame()?.ok_or("missing replay frame")?;
         assert_eq!(frame.raw_payload, raw_payload);
         assert_eq!(frame.expected_output_state, output_state);
 
-        let none = reader.next_frame().expect("Next frame failed");
+        let none = reader.next_frame()?;
         assert!(none.is_none());
+        Ok(())
     }
 
     #[test]
-    fn test_invalid_magic() {
+    fn test_invalid_magic() -> Result<(), Box<dyn std::error::Error>> {
         let mut buffer = Vec::new();
         // Manually craft bad magic
         buffer.extend_from_slice(b"BADMAGIC");
@@ -158,6 +173,10 @@ mod tests {
 
         let reader_result = ReplayReader::new(&buffer);
         assert!(reader_result.is_err());
-        assert_eq!(reader_result.unwrap_err().to_string(), "Invalid replay magic bytes");
+        assert_eq!(
+            reader_result.err().ok_or("err")?.to_string(),
+            "Invalid replay magic bytes"
+        );
+        Ok(())
     }
 }

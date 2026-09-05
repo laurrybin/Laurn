@@ -1,4 +1,4 @@
-// Copyright 2026 laurrybin and Laurn Contributors
+// Copyright 2026 Darwin Clay O. and Lawrence Obina
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -53,12 +53,12 @@ impl BorshDeserialize for TransitionClass {
 pub struct Policy {
     /// The strict protocol version expected by the network.
     pub protocol_version: u32,
-    /// Maximum allowed delta in milliseconds between a transition's timestamp 
+    /// Maximum allowed delta in milliseconds between a transition's timestamp
     /// and the timestamp of the state it is applied to (prevents applying transitions to ancient states).
     pub max_state_freshness_ms: u64,
     /// Whether transitions must be accompanied by cryptographically verified evidence.
     pub require_evidence: bool,
-    /// A bitmask of transition classes currently allowed. 
+    /// A bitmask of transition classes currently allowed.
     /// Can be used to lock down the simulation (e.g. pause SPAWN).
     pub allowed_transition_classes: TransitionClass,
     /// Minimum authority capability required to submit any transition under this policy.
@@ -105,11 +105,7 @@ impl PolicyEngine {
 
     /// Evaluates a transition context against the provided policy.
     #[must_use]
-    pub fn evaluate(
-        &self,
-        policy: &Policy,
-        ctx: &EvaluationContext,
-    ) -> PolicyDecision {
+    pub fn evaluate(&self, policy: &Policy, ctx: &EvaluationContext) -> PolicyDecision {
         // 1. Protocol Version
         if ctx.transition_protocol_version != policy.protocol_version {
             return PolicyDecision::Rejected(PolicyRejectionReason::ProtocolVersionMismatch);
@@ -132,13 +128,21 @@ impl PolicyEngine {
         }
 
         // 4. Transition Class Allowance
-        if !policy.allowed_transition_classes.contains(ctx.transition_class) {
+        if !policy
+            .allowed_transition_classes
+            .contains(ctx.transition_class)
+        {
             return PolicyDecision::Rejected(PolicyRejectionReason::TransitionClassNotAllowed);
         }
 
         // 5. Authority Capability Requirement
-        if !ctx.authority_capabilities.contains(policy.minimum_capability) {
-            return PolicyDecision::Rejected(PolicyRejectionReason::InsufficientAuthorityCapability);
+        if !ctx
+            .authority_capabilities
+            .contains(policy.minimum_capability)
+        {
+            return PolicyDecision::Rejected(
+                PolicyRejectionReason::InsufficientAuthorityCapability,
+            );
         }
 
         PolicyDecision::Accepted
@@ -148,10 +152,10 @@ impl PolicyEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use epoch::EpochId;
     use authority::AuthorityId;
+    use epoch::EpochId;
 
-    fn mock_metadata(timestamp_ms: u64) -> TransitionMetadata {
+    fn generate_test_metadata(timestamp_ms: u64) -> TransitionMetadata {
         TransitionMetadata {
             authority_id: AuthorityId([0u8; 32]),
             epoch_id: EpochId([1u8; 32]),
@@ -173,16 +177,17 @@ mod tests {
     fn test_policy_acceptance() {
         let engine = PolicyEngine::new();
         let policy = default_policy();
-        let metadata = mock_metadata(1000);
+        let metadata = generate_test_metadata(1000);
         let ctx = EvaluationContext {
             transition_protocol_version: 1, // matching version
             metadata: &metadata,
             parent_state_timestamp_ms: 900, // Delta is 100ms <= 500ms
-            has_evidence: true, // has evidence
+            has_evidence: true,             // has evidence
             transition_class: TransitionClass::INPUT,
-            authority_capabilities: AuthorityCapability::CAN_SUBMIT_TRANSITION | AuthorityCapability::CAN_SPAWN,
+            authority_capabilities: AuthorityCapability::CAN_SUBMIT_TRANSITION
+                | AuthorityCapability::CAN_SPAWN,
         };
-        
+
         let decision = engine.evaluate(&policy, &ctx);
 
         assert_eq!(decision, PolicyDecision::Accepted);
@@ -192,7 +197,7 @@ mod tests {
     fn test_policy_version_mismatch() {
         let engine = PolicyEngine::new();
         let policy = default_policy();
-        let metadata = mock_metadata(1000);
+        let metadata = generate_test_metadata(1000);
         let ctx = EvaluationContext {
             transition_protocol_version: 2, // mismatch!
             metadata: &metadata,
@@ -201,17 +206,20 @@ mod tests {
             transition_class: TransitionClass::INPUT,
             authority_capabilities: AuthorityCapability::CAN_SUBMIT_TRANSITION,
         };
-        
+
         let decision = engine.evaluate(&policy, &ctx);
 
-        assert_eq!(decision, PolicyDecision::Rejected(PolicyRejectionReason::ProtocolVersionMismatch));
+        assert_eq!(
+            decision,
+            PolicyDecision::Rejected(PolicyRejectionReason::ProtocolVersionMismatch)
+        );
     }
 
     #[test]
     fn test_policy_evidence_missing() {
         let engine = PolicyEngine::new();
         let policy = default_policy();
-        let metadata = mock_metadata(1000);
+        let metadata = generate_test_metadata(1000);
         let ctx = EvaluationContext {
             transition_protocol_version: 1,
             metadata: &metadata,
@@ -220,19 +228,22 @@ mod tests {
             transition_class: TransitionClass::INPUT,
             authority_capabilities: AuthorityCapability::CAN_SUBMIT_TRANSITION,
         };
-        
+
         let decision = engine.evaluate(&policy, &ctx);
 
-        assert_eq!(decision, PolicyDecision::Rejected(PolicyRejectionReason::EvidenceMissing));
+        assert_eq!(
+            decision,
+            PolicyDecision::Rejected(PolicyRejectionReason::EvidenceMissing)
+        );
     }
 
     #[test]
     fn test_policy_state_freshness_violation() {
         let engine = PolicyEngine::new();
         let policy = default_policy();
-        
+
         // Test transition is too far ahead of parent state
-        let metadata = mock_metadata(1600);
+        let metadata = generate_test_metadata(1600);
         let ctx1 = EvaluationContext {
             transition_protocol_version: 1,
             metadata: &metadata,
@@ -242,10 +253,13 @@ mod tests {
             authority_capabilities: AuthorityCapability::CAN_SUBMIT_TRANSITION,
         };
         let decision = engine.evaluate(&policy, &ctx1);
-        assert_eq!(decision, PolicyDecision::Rejected(PolicyRejectionReason::StateFreshnessViolation));
+        assert_eq!(
+            decision,
+            PolicyDecision::Rejected(PolicyRejectionReason::StateFreshnessViolation)
+        );
 
         // Test transition predates parent state
-        let predates_metadata = mock_metadata(900);
+        let predates_metadata = generate_test_metadata(900);
         let ctx2 = EvaluationContext {
             transition_protocol_version: 1,
             metadata: &predates_metadata,
@@ -255,34 +269,41 @@ mod tests {
             authority_capabilities: AuthorityCapability::CAN_SUBMIT_TRANSITION,
         };
         let decision2 = engine.evaluate(&policy, &ctx2);
-        assert_eq!(decision2, PolicyDecision::Rejected(PolicyRejectionReason::StateFreshnessViolation));
+        assert_eq!(
+            decision2,
+            PolicyDecision::Rejected(PolicyRejectionReason::StateFreshnessViolation)
+        );
     }
 
     #[test]
     fn test_policy_transition_class_not_allowed() {
         let engine = PolicyEngine::new();
         let policy = default_policy(); // Only INPUT and SPAWN allowed
-        let metadata = mock_metadata(1000);
+        let metadata = generate_test_metadata(1000);
         let ctx = EvaluationContext {
             transition_protocol_version: 1,
             metadata: &metadata,
             parent_state_timestamp_ms: 900,
             has_evidence: true,
             transition_class: TransitionClass::TIME_CONTROL, // Not allowed!
-            authority_capabilities: AuthorityCapability::CAN_SUBMIT_TRANSITION | AuthorityCapability::CAN_AUTHORIZE_TIME,
+            authority_capabilities: AuthorityCapability::CAN_SUBMIT_TRANSITION
+                | AuthorityCapability::CAN_AUTHORIZE_TIME,
         };
-        
+
         let decision = engine.evaluate(&policy, &ctx);
 
-        assert_eq!(decision, PolicyDecision::Rejected(PolicyRejectionReason::TransitionClassNotAllowed));
+        assert_eq!(
+            decision,
+            PolicyDecision::Rejected(PolicyRejectionReason::TransitionClassNotAllowed)
+        );
     }
 
     #[test]
     fn test_policy_insufficient_authority_capability() {
         let engine = PolicyEngine::new();
         let policy = default_policy(); // Requires CAN_SUBMIT_TRANSITION
-        let metadata = mock_metadata(1000);
-        
+        let metadata = generate_test_metadata(1000);
+
         let ctx = EvaluationContext {
             transition_protocol_version: 1,
             metadata: &metadata,
@@ -293,6 +314,9 @@ mod tests {
         };
         let decision = engine.evaluate(&policy, &ctx);
 
-        assert_eq!(decision, PolicyDecision::Rejected(PolicyRejectionReason::InsufficientAuthorityCapability));
+        assert_eq!(
+            decision,
+            PolicyDecision::Rejected(PolicyRejectionReason::InsufficientAuthorityCapability)
+        );
     }
 }

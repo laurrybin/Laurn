@@ -1,4 +1,4 @@
-// Copyright 2026 laurrybin and Laurn Contributors
+// Copyright 2026 Darwin Clay O. and Lawrence Obina
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,8 +19,8 @@
 #include "LaurnPlayerController.generated.h"
 
 /**
- * ALaurnPlayerController intercepts client actions and wraps them in
- * cryptographically signed Transitions sent to the server.
+ * ALaurnPlayerController exposes a server RPC for submitting serialized
+ * LAURN transition payloads for verification.
  */
 UCLASS()
 class LAURN_API ALaurnPlayerController : public APlayerController
@@ -29,13 +29,13 @@ class LAURN_API ALaurnPlayerController : public APlayerController
 
 public:
 	/**
-	 * Submits a cryptographically signed LAURN transition from the client to the server.
-	 * The server will verify the transition against the canonical state before applying it.
+	 * Submits a serialized LAURN transition payload from the client to the server.
+	 * The server passes the payload to ULaurnSubsystem for verification. Host game
+	 * logic remains responsible for deciding whether and how to apply an accepted transition.
 	 */
 	UFUNCTION(Server, Reliable, WithValidation, BlueprintCallable, Category="LAURN|Network")
 	void ServerSubmitTransition(const TArray<uint8>& TransitionPayload);
 	
-	// Implementation and validation definitions
 	void ServerSubmitTransition_Implementation(const TArray<uint8>& TransitionPayload);
 	bool ServerSubmitTransition_Validate(const TArray<uint8>& TransitionPayload);
 };

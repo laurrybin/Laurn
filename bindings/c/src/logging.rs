@@ -1,4 +1,4 @@
-// Copyright 2026 laurrybin and Laurn Contributors
+// Copyright 2026 Darwin Clay O. and Lawrence Obina
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use log::{LevelFilter, Log, Metadata, Record};
 use std::os::raw::c_char;
-use std::sync::atomic::{AtomicPtr, Ordering};
 use std::ptr;
-use log::{Log, Metadata, Record, LevelFilter};
+use std::sync::atomic::{AtomicPtr, Ordering};
 
 pub type LaurnLogCallback = unsafe extern "C" fn(level: i32, msg: *const c_char);
 

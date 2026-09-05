@@ -1,4 +1,4 @@
-// Copyright 2026 laurrybin and Laurn Contributors
+// Copyright 2026 Darwin Clay O. and Lawrence Obina
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -59,20 +59,39 @@ void ULaurnStateComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 
 void ULaurnStateComponent::SerializeCanonicalState(TArray<uint8>& OutBuffer) const
 {
-	// Write the StateId (4 bytes, little endian assumed for most UE platforms)
-	// For true cross-platform determinism, one could force explicit little-endian bitshifts here.
-	OutBuffer.Append(reinterpret_cast<const uint8*>(&StateId), sizeof(uint32));
+	auto AppendUInt32LE = [&OutBuffer](uint32 Value) {
+		uint8 Bytes[4];
+		Bytes[0] = static_cast<uint8>((Value >> 0) & 0xFFu);
+		Bytes[1] = static_cast<uint8>((Value >> 8) & 0xFFu);
+		Bytes[2] = static_cast<uint8>((Value >> 16) & 0xFFu);
+		Bytes[3] = static_cast<uint8>((Value >> 24) & 0xFFu);
+		OutBuffer.Append(Bytes, 4);
+	};
 
-	if (bTrackTransform)
+	auto AppendInt32LE = [&AppendUInt32LE](int32 Value) {
+		AppendUInt32LE(static_cast<uint32>(Value));
+	};
+
+	AppendUInt32LE(StateId);
+
+	AActor* Owner = GetOwner();
+	const bool bHasTransform = bTrackTransform && Owner != nullptr;
+	OutBuffer.Add(bHasTransform ? 1u : 0u);
+
+	if (bHasTransform)
 	{
-		AActor* Owner = GetOwner();
-		if (Owner)
-		{
-			FLaurnQuantizedTransform QTransform = FLaurnQuantizedTransform::FromFTransform(Owner->GetActorTransform());
-			OutBuffer.Append(reinterpret_cast<const uint8*>(&QTransform), sizeof(FLaurnQuantizedTransform));
-		}
+		const FLaurnQuantizedTransform QTransform =
+			FLaurnQuantizedTransform::FromFTransform(Owner->GetActorTransform());
+
+		AppendInt32LE(QTransform.Location.X);
+		AppendInt32LE(QTransform.Location.Y);
+		AppendInt32LE(QTransform.Location.Z);
+		AppendInt32LE(QTransform.Rotation.Pitch);
+		AppendInt32LE(QTransform.Rotation.Yaw);
+		AppendInt32LE(QTransform.Rotation.Roll);
 	}
 
+	AppendUInt32LE(static_cast<uint32>(CustomStateData.Num()));
 	if (CustomStateData.Num() > 0)
 	{
 		OutBuffer.Append(CustomStateData);

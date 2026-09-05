@@ -1,4 +1,4 @@
-// Copyright 2026 laurrybin and Laurn Contributors
+// Copyright 2026 Darwin Clay O. and Lawrence Obina
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,65 +12,34 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-using UnrealBuildTool;
 using System.IO;
+using UnrealBuildTool;
 
 public class Laurn : ModuleRules
 {
-	public Laurn(ReadOnlyTargetRules Target) : base(Target)
-	{
-		PCHUsage = ModuleRules.PCHUsageMode.UseExplicitOrSharedPCHs;
-		
-		PublicIncludePaths.AddRange(
-			new string[] {
-				// ... add public include paths required here ...
-			}
-			);
-				
-		
-		PrivateIncludePaths.AddRange(
-			new string[] {
-				// ... add other private include paths required here ...
-			}
-			);
-			
-		
-		PublicDependencyModuleNames.AddRange(
-			new string[]
-			{
-				"Core",
-				// ... add other public dependencies that you statically link with here ...
-			}
-			);
-			
-		
-		PrivateDependencyModuleNames.AddRange(
-			new string[]
-			{
-				"CoreUObject",
-				"Engine",
-				"Slate",
-				"SlateCore",
-				// ... add private dependencies that you statically link with here ...	
-			}
-			);
-		
-		
-		DynamicallyLoadedModuleNames.AddRange(
-			new string[]
-			{
-				// ... add any modules that your module loads dynamically here ...
-			}
-			);
-            
-        // Configure static linking of the Rust FFI library
-        string PluginPath = Utils.MakePathRelativeTo(ModuleDirectory, Target.RelativeEnginePath);
-        string RustLibDir = Path.Combine(PluginPath, "../../../../target/debug");
-        
+    public Laurn( ReadOnlyTargetRules Target ) : base(Target)
+    {
+        PCHUsage = ModuleRules.PCHUsageMode.UseExplicitOrSharedPCHs;
+
+        PublicDependencyModuleNames.Add("Core");
+
+        PrivateDependencyModuleNames.AddRange(
+            new string[]
+            {
+                "CoreUObject",
+                "Engine"
+            }
+        );
+
+        string RustLibDir = Path.GetFullPath(
+            Path.Combine(ModuleDirectory, "../../../../target/debug")
+        );
+
+        string RustLibPath;
+
         if (Target.Platform == UnrealTargetPlatform.Win64)
         {
-            PublicAdditionalLibraries.Add(Path.Combine(RustLibDir, "laurn_c.lib"));
-            // Windows typically needs these for standard library linking
+            RustLibPath = Path.Combine(RustLibDir, "laurn_c.lib");
             PublicAdditionalLibraries.Add("advapi32.lib");
             PublicAdditionalLibraries.Add("ws2_32.lib");
             PublicAdditionalLibraries.Add("userenv.lib");
@@ -78,15 +47,31 @@ public class Laurn : ModuleRules
         }
         else if (Target.Platform == UnrealTargetPlatform.Mac)
         {
-            PublicAdditionalLibraries.Add(Path.Combine(RustLibDir, "liblaurn_c.a"));
-            // Mac typically needs iconv and System framework for rust standard lib
-            PublicAdditionalLibraries.Add("iconv");
+            RustLibPath = Path.Combine(RustLibDir, "liblaurn_c.a");
+            PublicSystemLibraries.Add("iconv");
             PublicFrameworks.Add("System");
             PublicFrameworks.Add("CoreFoundation");
         }
         else if (Target.Platform == UnrealTargetPlatform.Linux)
         {
-            PublicAdditionalLibraries.Add(Path.Combine(RustLibDir, "liblaurn_c.a"));
+            RustLibPath = Path.Combine(RustLibDir, "liblaurn_c.a");
         }
+        else
+        {
+            throw new BuildException(
+                "LAURN does not currently configure a Rust FFI library for platform {0}.",
+                Target.Platform
+            );
+        }
+
+        if (!File.Exists(RustLibPath))
+        {
+            throw new BuildException(
+                "LAURN Rust FFI library not found at {0}. Run cargo build -p laurn-c from the repository root before building the Unreal plugin.",
+                RustLibPath
+            );
+        }
+
+        PublicAdditionalLibraries.Add(RustLibPath);
     }
 }

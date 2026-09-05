@@ -1,4 +1,4 @@
-// Copyright 2026 laurrybin and Laurn Contributors
+// Copyright 2026 Darwin Clay O. and Lawrence Obina
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,6 +17,23 @@ use borsh::{BorshDeserialize, BorshSerialize};
 use commitment::StateCommitment;
 use epoch::EpochId;
 use version_crate::ProtocolVersion;
+pub mod kv_state;
+pub use kv_state::KeyValueDomainState;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum StateSerializationError {
+    SerializationFailed(String),
+}
+
+impl std::fmt::Display for StateSerializationError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::SerializationFailed(msg) => write!(f, "State serialization failed: {msg}"),
+        }
+    }
+}
+
+impl std::error::Error for StateSerializationError {}
 
 /// `StateId` uniquely identifies a specific state representation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, BorshSerialize, BorshDeserialize)]
@@ -50,7 +67,11 @@ pub struct CanonicalState {
 pub trait DeterministicStateDomain {
     /// Returns the canonical, deterministically serialized bytes of the domain.
     /// This removes any platform-specific padding or compiler layout artifacts.
-    fn canonicalize(&self) -> Vec<u8>;
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StateSerializationError`] when canonical serialization fails.
+    fn canonicalize(&self) -> Result<Vec<u8>, StateSerializationError>;
 }
 
 #[cfg(test)]
@@ -65,14 +86,15 @@ mod tests {
     }
 
     impl DeterministicStateDomain for ExampleGameState {
-        fn canonicalize(&self) -> Vec<u8> {
-            // Borsh guarantees deterministic, padding-free little-endian serialization
-            borsh::to_vec(self).expect("Failed to serialize ExampleGameState")
+        fn canonicalize(&self) -> Result<Vec<u8>, StateSerializationError> {
+            // Borsh provides deterministic, padding-free little-endian serialization
+            borsh::to_vec(self)
+                .map_err(|e| StateSerializationError::SerializationFailed(e.to_string()))
         }
     }
 
     #[test]
-    fn test_canonical_serialization_is_deterministic() {
+    fn test_canonical_serialization_is_deterministic() -> Result<(), Box<dyn std::error::Error>> {
         let state1 = ExampleGameState {
             player_x: 42,
             player_y: -15,
@@ -86,22 +108,24 @@ mod tests {
         };
 
         // Identical semantic state must produce identical byte arrays.
-        assert_eq!(state1.canonicalize(), state2.canonicalize());
+        assert_eq!(state1.canonicalize()?, state2.canonicalize()?);
+        Ok(())
     }
 
     #[test]
-    fn test_canonical_serialization_numeric_handling() {
+    fn test_canonical_serialization_numeric_handling() -> Result<(), Box<dyn std::error::Error>> {
         let state = ExampleGameState {
             player_x: 0x0102_0304,
             player_y: 0,
             active: false,
         };
-        
-        let bytes = state.canonicalize();
+
+        let bytes = state.canonicalize()?;
         // borsh uses little-endian layout for numeric types
         assert_eq!(bytes[0], 0x04);
         assert_eq!(bytes[1], 0x03);
         assert_eq!(bytes[2], 0x02);
         assert_eq!(bytes[3], 0x01);
+        Ok(())
     }
 }

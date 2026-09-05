@@ -1,4 +1,4 @@
-// Copyright 2026 laurrybin and Laurn Contributors
+// Copyright 2026 Darwin Clay O. and Lawrence Obina
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,9 +14,9 @@
 
 use authority::AuthorityId;
 use borsh::{BorshDeserialize, BorshSerialize};
-use transition::TransitionCommitment;
-use ed25519_dalek::{Signature, VerifyingKey, Verifier};
+use ed25519_dalek::{Signature, Verifier, VerifyingKey};
 use epoch::EpochId;
+use transition::TransitionCommitment;
 
 pub mod platform;
 
@@ -27,10 +27,10 @@ pub const EVIDENCE_DOMAIN_V1: &[u8] = b"LAURN_EVIDENCE_V1";
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, BorshSerialize, BorshDeserialize)]
 pub struct EvidenceId(pub [u8; 32]);
 
-/// Specifies the type of trusted environment that produced the evidence.
+/// Specifies the type of execution environment associated with the evidence.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
 pub enum EvidenceType {
-    /// A trusted backend server generated this evidence.
+    /// A backend server generated this evidence.
     ServerAuthoritative,
     /// An Intel SGX secure enclave generated this evidence.
     IntelSgx,
@@ -38,7 +38,7 @@ pub enum EvidenceType {
     AwsNitro,
 }
 
-/// Represents cryptographic proof that a transition occurred in a trusted execution environment.
+/// Represents signed or attested evidence associated with a transition execution.
 #[derive(Debug, Clone, BorshSerialize, BorshDeserialize)]
 pub struct ExecutionEvidence {
     /// The unique identifier of this evidence.
@@ -66,23 +66,23 @@ impl ExecutionEvidence {
         let mut payload = Vec::new();
         payload.extend_from_slice(EVIDENCE_DOMAIN_V1);
         payload.extend_from_slice(&self.id.0);
-        
+
         let type_byte = match self.evidence_type {
             EvidenceType::ServerAuthoritative => 0,
             EvidenceType::IntelSgx => 1,
             EvidenceType::AwsNitro => 2,
         };
         payload.push(type_byte);
-        
+
         payload.extend_from_slice(&self.issuer.0);
         payload.extend_from_slice(&self.epoch_id.0);
         payload.extend_from_slice(&self.timestamp_ms.to_le_bytes());
         payload.extend_from_slice(self.transition_commitment.as_bytes());
-        
+
         // Include the hash of the raw attestation to bind it without copying potentially large bytes
         let attestation_hash = blake3::hash(&self.raw_attestation);
         payload.extend_from_slice(attestation_hash.as_bytes());
-        
+
         payload
     }
 
@@ -101,7 +101,7 @@ impl ExecutionEvidence {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ed25519_dalek::{SigningKey, Signer};
+    use ed25519_dalek::{Signer, SigningKey};
     use rand::rngs::OsRng;
 
     #[test]
@@ -109,7 +109,7 @@ mod tests {
         let mut csprng = OsRng;
         let signing_key = SigningKey::generate(&mut csprng);
         let verifying_key = signing_key.verifying_key();
-        
+
         let issuer_bytes = verifying_key.to_bytes();
         let issuer = AuthorityId(issuer_bytes);
 
@@ -118,7 +118,7 @@ mod tests {
             evidence_type: EvidenceType::ServerAuthoritative,
             issuer,
             epoch_id: EpochId([10u8; 32]),
-            timestamp_ms: 1234567890,
+            timestamp_ms: 1_234_567_890,
             transition_commitment: TransitionCommitment([2u8; 32]),
             raw_attestation: vec![0xca, 0xfe, 0xba, 0xbe],
             signature: [0u8; 64],
@@ -136,7 +136,7 @@ mod tests {
         let mut csprng = OsRng;
         let signing_key = SigningKey::generate(&mut csprng);
         let verifying_key = signing_key.verifying_key();
-        
+
         let issuer = AuthorityId(verifying_key.to_bytes());
 
         let mut evidence = ExecutionEvidence {
@@ -144,7 +144,7 @@ mod tests {
             evidence_type: EvidenceType::IntelSgx,
             issuer,
             epoch_id: EpochId([10u8; 32]),
-            timestamp_ms: 1234567890,
+            timestamp_ms: 1_234_567_890,
             transition_commitment: TransitionCommitment([2u8; 32]),
             raw_attestation: vec![0xca, 0xfe, 0xba, 0xbe],
             signature: [0u8; 64],
@@ -155,7 +155,7 @@ mod tests {
         evidence.signature = signature.to_bytes();
 
         // Alter timestamp
-        evidence.timestamp_ms = 1234567891;
+        evidence.timestamp_ms = 1_234_567_891;
         assert!(!evidence.verify_signature(&verifying_key));
     }
 }

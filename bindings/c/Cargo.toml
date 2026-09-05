@@ -22,6 +22,7 @@ replay = { path = "../../core/replay" }
 protocol = { path = "../../protocol" }
 version_crate = { path = "../../core/version", package = "version" }
 libc.workspace = true
+borsh.workspace = true
 ed25519-dalek.workspace = true
 log.workspace = true
 

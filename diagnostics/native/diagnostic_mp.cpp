@@ -1,4 +1,4 @@
-// Copyright 2026 laurrybin and Laurn Contributors
+// Copyright 2026 Darwin Clay O. and Lawrence Obina
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,12 +17,12 @@
 #include <cstring>
 #include "laurn.h"
 
-// Basic stub to verify we can link and call the multiplayer verification logic.
+// Multiplayer integration diagnostic to verify we can link and call the verification logic.
 // We simulate the flow of ALaurnPlayerController::ServerSubmitTransition.
 
 int main()
 {
-    std::cout << "Starting Laurn Multiplayer Integration Test...\n";
+    std::cout << "Starting Laurn Multiplayer Integration Diagnostic...\n";
 
     LaurnAuthorityEngineHandle* authority_engine = nullptr;
     if (laurn_authority_engine_create(&authority_engine) != LAURN_SUCCESS) {
@@ -30,9 +30,9 @@ int main()
         return 1;
     }
     
-    // Register the test authority
-    if (laurn_authority_engine_register_test_authority(authority_engine) != LAURN_SUCCESS) {
-        std::cerr << "Failed to register test authority.\n";
+    // Register the diagnostic authority
+    if (laurn_authority_engine_register_diagnostic_authority(authority_engine) != LAURN_SUCCESS) {
+        std::cerr << "Failed to register diagnostic authority.\n";
         return 1;
     }
 
@@ -54,28 +54,64 @@ int main()
         return 1;
     }
 
-    // Prepare a mock encoded transition.
+    // Prepare an encoded diagnostic transition.
     // In a real flow, the Unreal Client calls laurn_protocol_encode_message.
-    // For this test, we will create a dummy Transition Message.
+    // For this diagnostic, we construct a real Transition Message.
     
-    // First, let's create a raw payload
-    std::vector<uint8_t> raw_payload = { 0x01, 0x02, 0x03, 0x04 };
-    
-    // Generate signature using our test authority key
-    uint8_t signature[64] = {0};
-    if (laurn_test_sign_transition(raw_payload.data(), raw_payload.size(), &signature) != LAURN_SUCCESS) {
-        std::cerr << "Failed to sign payload.\n";
+    std::vector<uint8_t> raw_payload(32, 0x01);
+
+    uint64_t transition_id = 1;
+    uint32_t transition_class = 1;
+    uint8_t authority_id[32] = {0};
+    uint8_t epoch_id[32] = {0x01};
+    uint64_t timestamp_ms = 1000;
+    uint8_t input_state[32] = {0};
+    uint8_t output_state[32] = {0};
+
+    if (laurn_epoch_engine_register(
+            epoch_engine,
+            &epoch_id,
+            1,
+            0,
+            2000,
+            &input_state) != LAURN_SUCCESS) {
+        std::cerr << "Failed to register diagnostic epoch.\n";
         return 1;
     }
-    
-    // Encode the entire LaurnMessage (version + transition + raw_payload + signature)
+
+    if (laurn_epoch_engine_activate(epoch_engine, &epoch_id) != LAURN_SUCCESS) {
+        std::cerr << "Failed to activate diagnostic epoch.\n";
+        return 1;
+    }
+
+    uint8_t signature[64] = {0};
+    if (laurn_diagnostic_sign_transition(
+            transition_id,
+            transition_class,
+            &epoch_id,
+            timestamp_ms,
+            &input_state,
+            &output_state,
+            raw_payload.data(),
+            raw_payload.size(),
+            &authority_id,
+            &signature) != LAURN_SUCCESS) {
+        std::cerr << "Failed to sign transition.\n";
+        return 1;
+    }
+
     uint8_t* encoded_bytes = nullptr;
     size_t encoded_size = 0;
-    
+
     if (laurn_protocol_encode_transition_message(
             1, // protocol version
-            1, // transition class
-            1, // id
+            transition_class,
+            transition_id,
+            &authority_id,
+            &epoch_id,
+            timestamp_ms,
+            &input_state,
+            &output_state,
             raw_payload.data(),
             raw_payload.size(),
             &signature,
@@ -116,8 +152,8 @@ int main()
     uint32_t rx_transition_class = 0;
     laurn_transition_get_class(transition_handle, &rx_transition_class);
     
-    // Compute dummy generated output state
-    uint8_t dummy_output_state[32] = {0};
+    // Compute a diagnostic output state
+    uint8_t test_output_state[32] = {0};
     // (In reality this comes from laurn_state_commitment_compute)
     
     LaurnPolicyHandle* policy_handle = nullptr;
@@ -129,8 +165,8 @@ int main()
     params.raw_payload = rx_raw_payload;
     params.raw_payload_len = rx_raw_payload_len;
     params.signature = &rx_signature;
-    params.expected_input_state = &dummy_output_state;
-    params.generated_output_state = &dummy_output_state;
+    params.expected_input_state = &test_output_state;
+    params.generated_output_state = &test_output_state;
     params.authority_engine = authority_engine;
     params.epoch_engine = epoch_engine;
     params.policy_engine = policy_engine;
@@ -144,7 +180,7 @@ int main()
     if (verify_res == LAURN_SUCCESS) {
         std::cout << "SUCCESS: Transition verified successfully!\n";
     } else {
-        std::cout << "WARNING: Transition verification returned code " << verify_res << ". (Expected since we didn't mock everything perfectly, but FFI plumbing works)\n";
+        std::cout << "ERROR: Transition verification returned code " << verify_res << ".\n";
     }
     
     // Cleanup
@@ -157,6 +193,6 @@ int main()
     laurn_epoch_engine_destroy(epoch_engine);
     laurn_authority_engine_destroy(authority_engine);
 
-    std::cout << "Laurn Multiplayer Integration Test completed.\n";
+    std::cout << "Laurn Multiplayer Integration Diagnostic completed.\n";
     return 0;
 }

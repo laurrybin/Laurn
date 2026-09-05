@@ -1,4 +1,4 @@
-// Copyright 2026 laurrybin and Laurn Contributors
+// Copyright 2026 Darwin Clay O. and Lawrence Obina
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,6 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-fn main() {
-    println!("Hello, world!");
-}
+#pragma once
+#include "CoreMinimal.h"
+#include "GameFramework/GameModeBase.h"
+#include "ExampleGameMode.generated.h"
+
+UCLASS()
+class LAURNEXAMPLE_API AExampleGameMode : public AGameModeBase
+{
+    GENERATED_BODY()
+public:
+    AExampleGameMode();
+};

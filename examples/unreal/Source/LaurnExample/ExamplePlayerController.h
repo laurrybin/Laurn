@@ -1,4 +1,4 @@
-// Copyright 2026 laurrybin and Laurn Contributors
+// Copyright 2026 Darwin Clay O. and Lawrence Obina
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,18 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#[must_use]
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
+#pragma once
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+#include "CoreMinimal.h"
+#include "GameFramework/PlayerController.h"
+#include "ExamplePlayerController.generated.h"
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
+UCLASS()
+class LAURNEXAMPLE_API AExamplePlayerController : public APlayerController
+{
+    GENERATED_BODY()
+
+public:
+    virtual void SetupInputComponent() override;
+
+protected:
+    UFUNCTION(BlueprintCallable, Category = "LAURN|Diagnostic")
+    void TriggerRejectionDiagnostic();
+
+    void StartRecording();
+    void StopRecording();
+    void PlaybackReplay();
+};

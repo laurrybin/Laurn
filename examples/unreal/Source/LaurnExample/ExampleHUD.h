@@ -15,19 +15,23 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "GameFramework/GameStateBase.h"
-#include "ExampleGameState.generated.h"
-
-class ULaurnStateComponent;
+#include "GameFramework/HUD.h"
+#include "ExampleHUD.generated.h"
 
 UCLASS()
-class LAURNEXAMPLE_API AExampleGameState : public AGameStateBase
+class LAURNEXAMPLE_API AExampleHUD : public AHUD
 {
     GENERATED_BODY()
 
 public:
-    AExampleGameState();
+    AExampleHUD();
+    virtual void DrawHUD() override;
 
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "LAURN")
-    ULaurnStateComponent* LaurnStateComponent;
+    void ShowExpectedRejection();
+    void ShowUnexpectedAcceptance();
+
+private:
+    FString LastVerificationStatus;
+    FColor VerificationColor;
+    float StatusTimer;
 };

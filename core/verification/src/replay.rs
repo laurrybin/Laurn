@@ -1,4 +1,4 @@
-// Copyright 2026 laurrybin and Laurn Contributors
+// Copyright 2026 Darwin Clay O. and Lawrence Obina
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,7 +20,7 @@ use transition::TransitionId;
 pub const DEFAULT_MAX_REPLAY_HISTORY: usize = 4096;
 
 /// A bounded cache for tracking seen transitions to prevent replay attacks.
-/// It uses a VecDeque for O(1) eviction of oldest elements, and a HashSet for O(1) membership checks.
+/// It uses a `VecDeque` for O(1) eviction of oldest elements, and a `HashSet` for O(1) membership checks.
 #[derive(Debug, Clone)]
 pub struct ReplayBuffer {
     capacity: usize,
@@ -69,7 +69,7 @@ impl ReplayBuffer {
         self.set.insert(id);
         true
     }
-    
+
     /// Clears the replay buffer entirely.
     pub fn clear(&mut self) {
         self.history.clear();
@@ -84,25 +84,25 @@ mod tests {
     #[test]
     fn test_replay_buffer_capacity() {
         let mut buffer = ReplayBuffer::new(3);
-        
+
         // Insert 3 items
         assert!(buffer.insert(TransitionId(1)));
         assert!(buffer.insert(TransitionId(2)));
         assert!(buffer.insert(TransitionId(3)));
-        
+
         assert!(buffer.contains(&TransitionId(1)));
         assert!(buffer.contains(&TransitionId(2)));
         assert!(buffer.contains(&TransitionId(3)));
-        
+
         // Insert a 4th item, should evict 1
         assert!(buffer.insert(TransitionId(4)));
-        
+
         assert!(!buffer.contains(&TransitionId(1)));
         assert!(buffer.contains(&TransitionId(2)));
         assert!(buffer.contains(&TransitionId(3)));
         assert!(buffer.contains(&TransitionId(4)));
     }
-    
+
     #[test]
     fn test_replay_buffer_duplicate() {
         let mut buffer = ReplayBuffer::new(10);

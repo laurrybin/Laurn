@@ -1,4 +1,4 @@
-// Copyright 2026 laurrybin and Laurn Contributors
+// Copyright 2026 Darwin Clay O. and Lawrence Obina
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -34,8 +34,8 @@ pub enum EpochStatus {
 }
 
 /// An Epoch bounds the validity of state transitions in time.
-/// It strictly enforces sequencing and protects against replay attacks 
-/// by guaranteeing that transitions are only accepted during an active, non-expired window.
+/// It strictly enforces sequencing and protects against replay attacks
+/// so that transitions are accepted only during an active, non-expired window.
 #[derive(Debug, Clone, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
 pub struct Epoch {
     pub id: EpochId,
@@ -65,7 +65,7 @@ impl EpochEngine {
     }
 
     /// Registers a new epoch in the engine. It starts as `Pending`.
-    /// 
+    ///
     /// # Errors
     /// Returns an error if an epoch with this ID already exists.
     pub fn register_epoch(&mut self, epoch: Epoch) -> Result<(), &'static str> {
@@ -78,12 +78,12 @@ impl EpochEngine {
 
     /// Activates a pending epoch.
     /// Closes the currently active epoch if one exists to enforce strict sequential exclusivity.
-    /// 
+    ///
     /// # Errors
     /// Returns an error if the requested epoch doesn't exist or is already closed.
     pub fn activate_epoch(&mut self, id: EpochId) -> Result<(), &'static str> {
         let target_epoch = self.epochs.get(&id.0).ok_or("Epoch not found")?;
-        
+
         if target_epoch.status == EpochStatus::Closed {
             return Err("Cannot activate a closed epoch");
         }
@@ -107,13 +107,13 @@ impl EpochEngine {
     }
 
     /// Explicitly closes an epoch, preventing any further transitions.
-    /// 
+    ///
     /// # Errors
     /// Returns an error if the epoch does not exist.
     pub fn close_epoch(&mut self, id: EpochId) -> Result<(), &'static str> {
         let epoch = self.epochs.get_mut(&id.0).ok_or("Epoch not found")?;
         epoch.status = EpochStatus::Closed;
-        
+
         if self.active_epoch_id == Some(id) {
             self.active_epoch_id = None;
         }
@@ -159,7 +159,7 @@ impl EpochEngine {
 mod tests {
     use super::*;
 
-    fn dummy_epoch(id: u8, start: u64, exp: u64) -> Epoch {
+    fn generate_test_epoch(id: u8, start: u64, exp: u64) -> Epoch {
         Epoch {
             id: EpochId([id; 32]),
             sequence: u64::from(id),
@@ -171,30 +171,52 @@ mod tests {
     }
 
     #[test]
-    fn test_epoch_activation_closes_previous() {
+    fn test_epoch_activation_closes_previous() -> Result<(), Box<dyn std::error::Error>> {
         let mut engine = EpochEngine::new();
-        let e1 = dummy_epoch(1, 100, 200);
-        let e2 = dummy_epoch(2, 200, 300);
+        let e1 = generate_test_epoch(1, 100, 200);
+        let e2 = generate_test_epoch(2, 200, 300);
 
-        engine.register_epoch(e1.clone()).unwrap();
-        engine.register_epoch(e2.clone()).unwrap();
+        engine.register_epoch(e1.clone())?;
+        engine.register_epoch(e2.clone())?;
 
-        engine.activate_epoch(e1.id).unwrap();
-        assert_eq!(engine.epochs.get(&e1.id.0).unwrap().status, EpochStatus::Active);
+        engine.activate_epoch(e1.id)?;
+        assert_eq!(
+            engine
+                .epochs
+                .get(&e1.id.0)
+                .ok_or("missing epoch e1")?
+                .status,
+            EpochStatus::Active
+        );
 
         // Activate E2, should close E1
-        engine.activate_epoch(e2.id).unwrap();
-        assert_eq!(engine.epochs.get(&e1.id.0).unwrap().status, EpochStatus::Closed);
-        assert_eq!(engine.epochs.get(&e2.id.0).unwrap().status, EpochStatus::Active);
+        engine.activate_epoch(e2.id)?;
+        assert_eq!(
+            engine
+                .epochs
+                .get(&e1.id.0)
+                .ok_or("missing epoch e1")?
+                .status,
+            EpochStatus::Closed
+        );
+        assert_eq!(
+            engine
+                .epochs
+                .get(&e2.id.0)
+                .ok_or("missing epoch e2")?
+                .status,
+            EpochStatus::Active
+        );
+        Ok(())
     }
 
     #[test]
-    fn test_stale_epoch_rejection() {
+    fn test_stale_epoch_rejection() -> Result<(), Box<dyn std::error::Error>> {
         let mut engine = EpochEngine::new();
-        let e1 = dummy_epoch(1, 1000, 2000);
-        
-        engine.register_epoch(e1.clone()).unwrap();
-        engine.activate_epoch(e1.id).unwrap();
+        let e1 = generate_test_epoch(1, 1000, 2000);
+
+        engine.register_epoch(e1.clone())?;
+        engine.activate_epoch(e1.id)?;
 
         // 2000 is exactly at expiration (stale)
         assert!(!engine.validate_transition_binding(&e1.id, 2000));
@@ -202,34 +224,37 @@ mod tests {
         assert!(!engine.validate_transition_binding(&e1.id, 2500));
         // 1500 is within window (valid)
         assert!(engine.validate_transition_binding(&e1.id, 1500));
+        Ok(())
     }
 
     #[test]
-    fn test_future_epoch_rejection() {
+    fn test_future_epoch_rejection() -> Result<(), Box<dyn std::error::Error>> {
         let mut engine = EpochEngine::new();
-        let e1 = dummy_epoch(1, 1000, 2000);
-        
-        engine.register_epoch(e1.clone()).unwrap();
-        engine.activate_epoch(e1.id).unwrap();
+        let e1 = generate_test_epoch(1, 1000, 2000);
+
+        engine.register_epoch(e1.clone())?;
+        engine.activate_epoch(e1.id)?;
 
         // Transition timestamp is 999, which is before the epoch started (future epoch from transition perspective)
         assert!(!engine.validate_transition_binding(&e1.id, 999));
+        Ok(())
     }
 
     #[test]
-    fn test_inactive_epoch_rejection() {
+    fn test_inactive_epoch_rejection() -> Result<(), Box<dyn std::error::Error>> {
         let mut engine = EpochEngine::new();
-        let e1 = dummy_epoch(1, 1000, 2000);
-        
-        engine.register_epoch(e1.clone()).unwrap();
-        
+        let e1 = generate_test_epoch(1, 1000, 2000);
+
+        engine.register_epoch(e1.clone())?;
+
         // E1 is still Pending, not active
         assert!(!engine.validate_transition_binding(&e1.id, 1500));
 
-        engine.activate_epoch(e1.id).unwrap();
-        engine.close_epoch(e1.id).unwrap();
+        engine.activate_epoch(e1.id)?;
+        engine.close_epoch(e1.id)?;
 
         // E1 is now Closed
         assert!(!engine.validate_transition_binding(&e1.id, 1500));
+        Ok(())
     }
 }

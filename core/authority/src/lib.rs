@@ -1,4 +1,4 @@
-// Copyright 2026 laurrybin and Laurn Contributors
+// Copyright 2026 Darwin Clay O. and Lawrence Obina
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -188,7 +188,7 @@ mod tests {
     }
 
     #[test]
-    fn test_authority_capabilities() {
+    fn test_authority_capabilities() -> Result<(), Box<dyn std::error::Error>> {
         let mut engine = AuthorityEngine::new();
         let (_, auth_id) = generate_keypair();
 
@@ -199,7 +199,7 @@ mod tests {
             session_binding: None,
         };
 
-        engine.register_authority(authority).unwrap();
+        engine.register_authority(authority)?;
 
         assert!(engine.check_capability(&auth_id, AuthorityCapability::CAN_SUBMIT_TRANSITION));
         assert!(!engine.check_capability(&auth_id, AuthorityCapability::CAN_AUTHORIZE_TIME));
@@ -207,10 +207,11 @@ mod tests {
         // Unauthorized (unknown) authority checks gracefully fail
         let (_, unknown_id) = generate_keypair();
         assert!(!engine.check_capability(&unknown_id, AuthorityCapability::CAN_SUBMIT_TRANSITION));
+        Ok(())
     }
 
     #[test]
-    fn test_cryptographic_authentication() {
+    fn test_cryptographic_authentication() -> Result<(), Box<dyn std::error::Error>> {
         let mut engine = AuthorityEngine::new();
         let (signing_key, auth_id) = generate_keypair();
 
@@ -221,25 +222,32 @@ mod tests {
             session_binding: None,
         };
 
-        engine.register_authority(authority).unwrap();
+        engine.register_authority(authority)?;
 
         let payload = b"state_transition_payload_12345";
         let signature = signing_key.sign(payload);
 
         // Valid signature should pass
-        assert!(engine.verify_signature(&auth_id, payload, &signature.to_bytes()).is_ok());
+        assert!(engine
+            .verify_signature(&auth_id, payload, &signature.to_bytes())
+            .is_ok());
 
         // Tampered payload should fail
         let bad_payload = b"state_transition_payload_99999";
-        assert!(engine.verify_signature(&auth_id, bad_payload, &signature.to_bytes()).is_err());
+        assert!(engine
+            .verify_signature(&auth_id, bad_payload, &signature.to_bytes())
+            .is_err());
 
         // Unauthorized authority trying to verify should fail
         let (_, unknown_id) = generate_keypair();
-        assert!(engine.verify_signature(&unknown_id, payload, &signature.to_bytes()).is_err());
+        assert!(engine
+            .verify_signature(&unknown_id, payload, &signature.to_bytes())
+            .is_err());
+        Ok(())
     }
 
     #[test]
-    fn test_authority_rotation() {
+    fn test_authority_rotation() -> Result<(), Box<dyn std::error::Error>> {
         let mut engine = AuthorityEngine::new();
         let (_, auth_id) = generate_keypair();
 
@@ -250,17 +258,19 @@ mod tests {
             session_binding: None,
         };
 
-        engine.register_authority(authority.clone()).unwrap();
+        engine.register_authority(authority.clone())?;
         assert!(engine.check_capability(&auth_id, AuthorityCapability::CAN_SUBMIT_TRANSITION));
 
         // Update capabilities
         let mut updated = authority;
-        updated.capabilities = AuthorityCapability::CAN_SUBMIT_TRANSITION | AuthorityCapability::CAN_SPAWN;
-        engine.update_authority(updated).unwrap();
+        updated.capabilities =
+            AuthorityCapability::CAN_SUBMIT_TRANSITION | AuthorityCapability::CAN_SPAWN;
+        engine.update_authority(updated)?;
         assert!(engine.check_capability(&auth_id, AuthorityCapability::CAN_SPAWN));
 
         // Remove authority
-        engine.remove_authority(&auth_id).unwrap();
+        engine.remove_authority(&auth_id)?;
         assert!(!engine.check_capability(&auth_id, AuthorityCapability::CAN_SUBMIT_TRANSITION));
+        Ok(())
     }
 }
