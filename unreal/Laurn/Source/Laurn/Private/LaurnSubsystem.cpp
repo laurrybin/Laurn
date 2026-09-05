@@ -150,25 +150,52 @@ void ULaurnSubsystem::UnregisterStateComponent(ULaurnStateComponent* Component)
 
 bool ULaurnSubsystem::ComputeGlobalStateCommitment(TArray<uint8>& OutHash) const
 {
-	// 1. Sort components deterministically by StateId to ensure consistent ordering
-	// across all peers, regardless of spawn order.
 	TArray<ULaurnStateComponent*> SortedComponents = RegisteredStateComponents;
+	SortedComponents.RemoveAll([](const ULaurnStateComponent* Component) {
+		return Component == nullptr;
+	});
 	SortedComponents.Sort([](const ULaurnStateComponent& A, const ULaurnStateComponent& B) {
 		return A.StateId < B.StateId;
 	});
 
-	// 2. Concatenate canonical state buffers
-	TArray<uint8> GlobalStateBuffer;
-	
-	for (ULaurnStateComponent* Comp : SortedComponents)
+	for (int32 Index = 1; Index < SortedComponents.Num(); ++Index)
 	{
-		if (Comp)
+		if (SortedComponents[Index - 1]->StateId == SortedComponents[Index]->StateId)
 		{
-			Comp->SerializeCanonicalState(GlobalStateBuffer);
+			UE_LOG(
+				LogLaurn,
+				Error,
+				TEXT("Duplicate LAURN StateId %u; refusing to compute a canonical state commitment."),
+				SortedComponents[Index]->StateId
+			);
+			OutHash.Reset();
+			return false;
 		}
 	}
 
-	// 3. Delegate to Laurn engine
+	auto AppendUInt32LE = [](TArray<uint8>& Buffer, uint32 Value) {
+		uint8 Bytes[4];
+		Bytes[0] = static_cast<uint8>((Value >> 0) & 0xFFu);
+		Bytes[1] = static_cast<uint8>((Value >> 8) & 0xFFu);
+		Bytes[2] = static_cast<uint8>((Value >> 16) & 0xFFu);
+		Bytes[3] = static_cast<uint8>((Value >> 24) & 0xFFu);
+		Buffer.Append(Bytes, 4);
+	};
+
+	TArray<uint8> GlobalStateBuffer;
+	const uint8 EncodingMagic[8] = {'L', 'A', 'U', 'R', 'N', 'S', 'T', '1'};
+	GlobalStateBuffer.Append(EncodingMagic, UE_ARRAY_COUNT(EncodingMagic));
+	AppendUInt32LE(GlobalStateBuffer, static_cast<uint32>(SortedComponents.Num()));
+
+	for (ULaurnStateComponent* Component : SortedComponents)
+	{
+		TArray<uint8> ComponentBuffer;
+		Component->SerializeCanonicalState(ComponentBuffer);
+
+		AppendUInt32LE(GlobalStateBuffer, static_cast<uint32>(ComponentBuffer.Num()));
+		GlobalStateBuffer.Append(ComponentBuffer);
+	}
+
 	return ComputeStateCommitment(GlobalStateBuffer, OutHash);
 }
 

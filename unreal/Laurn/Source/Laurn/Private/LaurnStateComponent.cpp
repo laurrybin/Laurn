@@ -59,35 +59,39 @@ void ULaurnStateComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 
 void ULaurnStateComponent::SerializeCanonicalState(TArray<uint8>& OutBuffer) const
 {
-	auto AppendInt32LE = [&OutBuffer](int32 Value) {
+	auto AppendUInt32LE = [&OutBuffer](uint32 Value) {
 		uint8 Bytes[4];
-		Bytes[0] = static_cast<uint8>((Value >> 0) & 0xFF);
-		Bytes[1] = static_cast<uint8>((Value >> 8) & 0xFF);
-		Bytes[2] = static_cast<uint8>((Value >> 16) & 0xFF);
-		Bytes[3] = static_cast<uint8>((Value >> 24) & 0xFF);
+		Bytes[0] = static_cast<uint8>((Value >> 0) & 0xFFu);
+		Bytes[1] = static_cast<uint8>((Value >> 8) & 0xFFu);
+		Bytes[2] = static_cast<uint8>((Value >> 16) & 0xFFu);
+		Bytes[3] = static_cast<uint8>((Value >> 24) & 0xFFu);
 		OutBuffer.Append(Bytes, 4);
 	};
 
-	// Write the StateId (4 bytes, explicitly little-endian)
-	AppendInt32LE(static_cast<int32>(StateId));
+	auto AppendInt32LE = [&AppendUInt32LE](int32 Value) {
+		AppendUInt32LE(static_cast<uint32>(Value));
+	};
 
-	if (bTrackTransform)
+	AppendUInt32LE(StateId);
+
+	AActor* Owner = GetOwner();
+	const bool bHasTransform = bTrackTransform && Owner != nullptr;
+	OutBuffer.Add(bHasTransform ? 1u : 0u);
+
+	if (bHasTransform)
 	{
-		AActor* Owner = GetOwner();
-		if (Owner)
-		{
-			FLaurnQuantizedTransform QTransform = FLaurnQuantizedTransform::FromFTransform(Owner->GetActorTransform());
-			
-			AppendInt32LE(QTransform.Location.X);
-			AppendInt32LE(QTransform.Location.Y);
-			AppendInt32LE(QTransform.Location.Z);
-			
-			AppendInt32LE(QTransform.Rotation.Pitch);
-			AppendInt32LE(QTransform.Rotation.Yaw);
-			AppendInt32LE(QTransform.Rotation.Roll);
-		}
+		const FLaurnQuantizedTransform QTransform =
+			FLaurnQuantizedTransform::FromFTransform(Owner->GetActorTransform());
+
+		AppendInt32LE(QTransform.Location.X);
+		AppendInt32LE(QTransform.Location.Y);
+		AppendInt32LE(QTransform.Location.Z);
+		AppendInt32LE(QTransform.Rotation.Pitch);
+		AppendInt32LE(QTransform.Rotation.Yaw);
+		AppendInt32LE(QTransform.Rotation.Roll);
 	}
 
+	AppendUInt32LE(static_cast<uint32>(CustomStateData.Num()));
 	if (CustomStateData.Num() > 0)
 	{
 		OutBuffer.Append(CustomStateData);
