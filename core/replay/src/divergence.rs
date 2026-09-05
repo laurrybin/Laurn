@@ -133,17 +133,19 @@ impl DivergenceAnalyzer {
             let auth_frame = match auth_reader.next_frame() {
                 Ok(Some(f)) => f,
                 Ok(None) => {
-                    // Auth finished. Does test have more?
-                    return if let Ok(Some(_)) = test_reader.next_frame() {
-                        Some(DivergenceReport {
+                    return match test_reader.next_frame() {
+                        Ok(None) => None,
+                        Ok(Some(_)) => Some(DivergenceReport {
                             frame_index,
                             reason: DivergenceReason::LengthMismatch {
                                 expected_frames: auth_reader.total_frames,
                                 actual_frames: test_reader.total_frames,
                             },
-                        })
-                    } else {
-                        None // Both finished
+                        }),
+                        Err(_) => Some(DivergenceReport {
+                            frame_index,
+                            reason: DivergenceReason::DecodeFailed,
+                        }),
                     };
                 }
                 Err(_) => {
@@ -194,5 +196,44 @@ impl DivergenceAnalyzer {
 
             frame_index += 1;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ReplayRecorder;
+
+    #[test]
+    fn malformed_trailing_test_frame_reports_decode_failure(
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let initial_state = StateCommitment([0; 32]);
+        let payload = vec![1, 2, 3, 4];
+        let output_state = StateCommitment([7; 32]);
+
+        let mut recorder = ReplayRecorder::new(initial_state);
+        recorder.add_frame(payload, output_state);
+
+        let auth_bytes = recorder.serialize()?;
+        let mut test_bytes = auth_bytes.clone();
+
+        let empty_bytes = ReplayRecorder::new(initial_state).serialize()?;
+        let frame_count_offset = empty_bytes
+            .len()
+            .checked_sub(std::mem::size_of::<u32>())
+            .ok_or("serialized replay is shorter than its frame count")?;
+
+        test_bytes[frame_count_offset..frame_count_offset + 4].copy_from_slice(&2u32.to_le_bytes());
+
+        let mut auth_reader = ReplayReader::new(&auth_bytes)?;
+        let mut test_reader = ReplayReader::new(&test_bytes)?;
+
+        let report = DivergenceAnalyzer::analyze(&mut auth_reader, &mut test_reader)
+            .ok_or("expected malformed trailing frame to report divergence")?;
+
+        assert_eq!(report.frame_index, 1);
+        assert_eq!(report.reason, DivergenceReason::DecodeFailed);
+
+        Ok(())
     }
 }
